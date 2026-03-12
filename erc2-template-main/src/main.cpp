@@ -1,5 +1,6 @@
-#include <FEH.h>
-#include <Arduino.h>
+#include <FEHLCD.h>
+#include <FEHIO.h>
+
 
 //Motor and encoder declarations
 FEHMotor leftMotor(FEHMotor::Motor0, 6.0);
