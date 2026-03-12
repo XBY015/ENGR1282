@@ -1,5 +1,6 @@
 #include <FEH.h>
 #include <Arduino.h>
+//githubtest
 
 // Motor and encoder declarations
 FEHMotor leftMotor(FEHMotor::Motor0, 6.0);
@@ -161,7 +162,7 @@ void followLineToIntersection(int percent)
             { // if it's been off the line for more than 0.5 seconds, stop and break out of the loop
                 leftMotor.Stop();
                 rightMotor.Stop();
-                break;
+                return;
             }
             break;
         case 1: // veering left, left and middle sensors are above threshold, turn right, left motor goes forward, right motor goes backward
