@@ -1,9 +1,6 @@
 #include <FEH.h>
 #include <Arduino.h>
 
-
-
-
 // Motor and encoder declarations
 FEHMotor leftMotor(FEHMotor::Motor0, 6.0);
 FEHMotor rightMotor(FEHMotor::Motor1, 6.0);
@@ -25,9 +22,9 @@ const float ENCODER_COUNTS_PER_REVOLUTION = 318;                                
 const float INCHES_PER_COUNT = (WHEEL_DIAMETER * 3.14159) / ENCODER_COUNTS_PER_REVOLUTION; // inches traveled per encoder tick
 const float ROBOT_WIDTH = 7.15;                                                            // distance between the centers of the two wheels in inches
 // const float ROBOT_LENGTH; //distance from the center of the robot to the front in inches
-const float LEFT_OPTOSENSOR_THRESHOLD = 3;     // threshold value for left optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
+const float LEFT_OPTOSENSOR_THRESHOLD = 4;     // threshold value for left optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float MIDDLE_OPTOSENSOR_THRESHOLD = 4.6; // threshold value for middle optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
-const float RIGHT_OPTOSENSOR_THRESHOLD = 3;    // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
+const float RIGHT_OPTOSENSOR_THRESHOLD = 4;    // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 
 // enums
 //  enum INTERSECTION_TYPE{
@@ -112,8 +109,8 @@ void turnRight(int percent, float angle) // left motor goes forward, right motor
 // This function will follow the line until it hits a branch
 void followLineToIntersection(int percent)
 {
-    float lostLineTimer=0.0;
-    bool isLost=false;
+    float lostLineTimer = 0.0;
+    bool isLost = false;
 
     /*
     State 0: 000, off the line (all sensors below threshold)
@@ -122,6 +119,8 @@ void followLineToIntersection(int percent)
     State 2: 010, on the line (all three sensors are above threshold)
     State 7: 111, at an intersection (all three sensors are above threshold)
     State 3: 011, at an T intersection (middle and right sensors are above threshold)
+    State 5: 101, at an T intersection (left and middle sensors are above threshold)
+    State 6: 110, at an T intersection (left and right sensors are above threshold)
     */
 
     // combine the three sensor readings into a 3 bit integer representing the current state
@@ -139,8 +138,12 @@ void followLineToIntersection(int percent)
         LCD.WriteLine(middleValue);
         LCD.WriteLine(rightValue);
         LCD.WriteLine(currentState);
+        LCD.WriteLine(isLost);
+        LCD.WriteLine(TimeNow() - lostLineTimer);
 
-        if(currentState==7||currentState==3){
+        if (currentState == 7 || currentState == 3 || currentState == 5 || currentState == 6)
+        {
+            goForward(percent,1);
             leftMotor.Stop();
             rightMotor.Stop();
             break;
@@ -149,31 +152,38 @@ void followLineToIntersection(int percent)
         switch (currentState)
         {
         case 0:
-            if(!isLost){
-                lostLineTimer=TimeNow();
-                isLost=true;
+            if (!isLost)
+            {
+                lostLineTimer = TimeNow();
+                isLost = true;
             }
-            else if(TimeNow()-lostLineTimer>1){ // if it's been off the line for more than 0.5 seconds, stop and break out of the loop
+            else if (TimeNow() - lostLineTimer > 1)
+            { // if it's been off the line for more than 0.5 seconds, stop and break out of the loop
                 leftMotor.Stop();
                 rightMotor.Stop();
                 break;
             }
             break;
         case 1: // veering left, left and middle sensors are above threshold, turn right, left motor goes forward, right motor goes backward
+            isLost = false;
+            lostLineTimer = 0.0;
             leftMotor.SetPercent(-percent);
             rightMotor.SetPercent(-percent);
             break;
         case 4: // veering right, right and middle sensors are above threshold, turn left, left motor goes backward, right motor goes forward
+            isLost = false;
+            lostLineTimer = 0.0;
             leftMotor.SetPercent(percent);
             rightMotor.SetPercent(percent);
             break;
         case 2: // on the line, all three sensors are above threshold, go straight
+            isLost = false;
+            lostLineTimer = 0.0;
             leftMotor.SetPercent(-percent);
             rightMotor.SetPercent(percent);
             break;
         }
         Sleep(0.05);
-        
     }
 }
 
