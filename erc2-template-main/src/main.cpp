@@ -7,6 +7,7 @@ FEHMotor leftMotor(FEHMotor::Motor0, 6.0);
 FEHMotor rightMotor(FEHMotor::Motor1, 6.0);
 DigitalEncoder leftEncoder(FEHIO::Pin8);
 DigitalEncoder rightEncoder(FEHIO::Pin10);
+FEHServo humidifierServo(FEHServo::Servo0);
 
 // Sensor declarations
 AnalogInputPin optosensorLeft(FEHIO::Pin0);
@@ -22,7 +23,10 @@ bool humidifierIsRed = false; // keep track of whether the humidifier light is r
 const float WHEEL_DIAMETER = 3.0;                                                          // in inches
 const float ENCODER_COUNTS_PER_REVOLUTION = 318;                                           // ticks per revolution of the wheel
 const float INCHES_PER_COUNT = (WHEEL_DIAMETER * 3.14159) / ENCODER_COUNTS_PER_REVOLUTION; // inches traveled per encoder tick
-const float ROBOT_WIDTH = 7.15;                                                            // distance between the centers of the two wheels in inches
+const float ROBOT_WIDTH = 7.15;          
+const float SERVO_BANDWIDTH = 20;      
+const float SECONDS_PER_DEGREE_NEG = 0.0023; //0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
+const float SECONDS_PER_DEGREE_POS = 0.00175; //0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
 // const float ROBOT_LENGTH; //distance from the center of the robot to the front in inches
 const float LEFT_OPTOSENSOR_THRESHOLD = 4;     // threshold value for left optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float MIDDLE_OPTOSENSOR_THRESHOLD = 4.6; // threshold value for middle optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
@@ -40,6 +44,28 @@ const float RIGHT_OPTOSENSOR_THRESHOLD = 4;    // threshold value for right opto
 //  }
 
 // Function declarations
+void setServoSpeed(int percent){
+    //int degree = 90+(percent*SERVO_BANDWIDTH/100);
+    int degree = 90+(percent*90/100);
+    humidifierServo.SetDegree(degree);
+}
+void turnServoByAngle(float angle){
+    if(angle==0) return;
+    int operatingSpeed = 50;
+    float timeToWait = 0.0;
+    if(angle<0){
+        operatingSpeed = -50;
+        timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
+    }
+    else{
+        operatingSpeed = 50;
+        timeToWait = angle * SECONDS_PER_DEGREE_POS;
+    }
+    setServoSpeed(operatingSpeed);
+    Sleep(timeToWait);
+    setServoSpeed(0);
+}
+
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
 void goForward(int percent, float distance)
 {
@@ -194,39 +220,70 @@ void followLineToIntersection(int percent)
 
 void ERCMain()
 {
+
+    //TestGUI();    
+    //negative pushing left button, positive pushing right button
+    //initialize servo
+    // humidifierServo.SetMin(1024);
+    // humidifierServo.SetMax(1876);
+    // LCD.WriteLine("servo calibrated");
+    // turnServoByAngle(-40);
+    // Sleep(2.0);
+    // LCD.WriteLine("feedback for initial twist");
+    // Sleep(2.0);
+    // turnServoByAngle(-50);
+    // LCD.WriteLine("turned servo by -20 degrees");
+    // Sleep(2.0);
+    // turnServoByAngle(50);
+    // LCD.WriteLine("turned servo by 20 degrees");
+    
     // Milestone 2
     // Step 1: Wait for the light, go backward and push the button, then orient towards the ramp, drive to the light at humidifier
-    // while(cdsCell.Value() > 1){} //wait for the light to turn on
+    //while(cdsCell.Value() > 1){} //wait for the light to turn on
     // LCD.WriteLine("light detected, starting!");
-     goForward(-75, 3); //go backward for 3 inches so that it hits the button
-     LCD.WriteLine("button pushed");
-     goForward(50, 1); //go forward for 1 inch to get off the button
-     LCD.WriteLine("getting off button");
-     turnRight(25,(45+18.7)); //45: from the tip of letter A to the corner facing the ramp, 18.7: from the corner facing the ramp to the center of the ramp
-     LCD.WriteLine("oriented towards ramp");
-     goForward(50,7.41);
-     LCD.WriteLine("at the beginning of the ramp");
-     turnLeft(25,(18.7)); //orient to front
-     LCD.WriteLine("oriented forward");
-     goForward(50,12.5); //to the beginning of the line on the upper level
-     LCD.WriteLine("on the line on upper level");
-     goForward(50,11.7);//follow the line until the first intersection, which is a T intersection with branch at thhe right
-     LCD.WriteLine("at the corner");
-     turnLeft(25,90); //turn left at the T intersection to face the ramp
-     LCD.WriteLine("turned left at the corner");
-     goForward(50, 15); //go forward a little bit to get off the intersection
-     LCD.WriteLine("reached LED");
-     while(cdsCell.Value() > 1){
-        leftMotor.SetPercent(20);
-        rightMotor.SetPercent(20);
-     } //keep going forward until it detects the light at the humidifier
-     leftMotor.Stop();
-     rightMotor.Stop();
-     LCD.WriteLine("light at humidifier detected");
-     if(cdsCell.Value()<0.5){
-        humidifierIsRed = true;
-        LCD.WriteLine("humidifier is red");
-     }
-     
+    //  goForward(-75, 3); //go backward for 3 inches so that it hits the button
+    //  LCD.WriteLine("button pushed");
+    //  goForward(50, 1); //go forward for 1 inch to get off the button
+    //  LCD.WriteLine("getting off button");
+    //  turnRight(25,(45+18.7)); //45: from the tip of letter A to the corner facing the ramp, 18.7: from the corner facing the ramp to the center of the ramp
+    //  LCD.WriteLine("oriented towards ramp");
+    //  goForward(50,16);
+    //  LCD.WriteLine("reached the beginning of the ramp");
+    //  turnLeft(25,(18.7)); //orient to front
+    //  LCD.WriteLine("oriented forward");
+    //  goForward(50,12); //to the beginning of the line on the upper level
+    //  LCD.WriteLine("on the line on upper level");
+    //  goForward(50,11.7);//follow the line until the first intersection, which is a T intersection with branch at thhe right
+    //  LCD.WriteLine("at the corner");
+    //  turnLeft(25,90); //turn left at the T intersection to face the ramp
+    //  LCD.WriteLine("turned left at the corner");
+    //  goForward(50, 15); //go forward a little bit to get off the intersection
+    //  LCD.WriteLine("reached LED");
 
+    // float pulse = 15;
+    // float pulseTime = 0.1;
+
+    //  while(cdsCell.Value() > 1){
+    //     leftMotor.SetPercent(20);
+    //     rightMotor.SetPercent(20);
+    //     Sleep(pulseTime);
+    //     leftMotor.Stop();
+    //     rightMotor.Stop();
+    //     Sleep(pulseTime);
+    //  } //keep going forward until it detects the light at the humidifier
+    //  leftMotor.Stop();
+    //  rightMotor.Stop();
+    //  LCD.WriteLine("light at humidifier detected");
+    //  if(cdsCell.Value()<0.5){
+    //     humidifierIsRed = true;
+    //     LCD.WriteLine("humidifier is red");
+    //  }
+    turnLeft(25,180);
+    Sleep(2.0);
+    turnRight(25,180);
 }
+// min at full speed 884
+// max at full speed 1876
+// stop point 1450
+//clkwise width: 1450-1380=70
+//counterclkwise width: 1526-1450=76
