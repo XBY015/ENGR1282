@@ -253,7 +253,7 @@ void ERCMain()
     //  LCD.WriteLine("oriented forward");
     //  goForward(50,12); //to the beginning of the line on the upper level
     //  LCD.WriteLine("on the line on upper level");
-    //  goForward(50,11.7);//follow the line until the first intersection, which is a T intersection with branch at thhe right
+    //  goForward(50,11.7);
     //  LCD.WriteLine("at the corner");
     //  turnLeft(25,90); //turn left at the T intersection to face the ramp
     //  LCD.WriteLine("turned left at the corner");
@@ -277,10 +277,36 @@ void ERCMain()
     //  if(cdsCell.Value()<0.5){
     //     humidifierIsRed = true;
     //     LCD.WriteLine("humidifier is red");
+    //     goForward(25,6); //reach humidifier
+    //      turnServoByAngle(50);
     //  }
-    turnLeft(25,180);
-    Sleep(2.0);
-    turnRight(25,180);
+    //else{
+        // LCD.WriteLine("humidifier is blue");
+        // goForward(25,6); //reach humidifier
+        // turnServoByAngle(-50);
+    //}
+
+    //Sleep(2.0);
+
+    //Bonus: get back to the starting point
+    //LCD.Clear();
+    //turnLeft(25,180);
+    //LCD.WriteLine("turned around");
+    //goForward(50, 22);
+    //LCD.WriteLine("reached corner");
+    //turnRight(25,90);
+    //LCD.WriteLine("oriented towards ramp");
+    //goForward(50,11.7);
+    //LCD.WriteLine("reached the lower level");
+    //goForward(50,16);
+    //LCD.WriteLine("reached the letter");
+    //turnRight(25,45+18.7);
+    //LCD.WriteLine("oriented towards button");
+    //goForward(50,2);
+    //LCD.WriteLine("pushed button");
+
+
+
 }
 // min at full speed 884
 // max at full speed 1876
