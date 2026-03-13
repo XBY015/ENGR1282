@@ -16,6 +16,7 @@ AnalogInputPin cdsCell(FEHIO::Pin6);
 
 // Variables
 int intersectionCount = 0; // keep track of how many intersections we've gone through
+bool humidifierIsRed = false; // keep track of whether the humidifier light is red or blue, initialized to false (blue) but will be updated when we see the light at the humidifier
 
 // Constants
 const float WHEEL_DIAMETER = 3.0;                                                          // in inches
@@ -54,7 +55,7 @@ void goForward(int percent, float distance)
     rightMotor.SetPercent(percent);
 
     // Keeps moving forward until the average of the two encoders reaches the target counts
-    while ((leftEncoder.Counts() + rightEncoder.Counts()) / 2 < targetCounts)
+    while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
     {
     }
 
@@ -142,9 +143,10 @@ void followLineToIntersection(int percent)
         LCD.WriteLine(isLost);
         LCD.WriteLine(TimeNow() - lostLineTimer);
 
-        if (currentState == 7 || currentState == 3 || currentState == 5 || currentState == 6)
+        if (currentState == 7 || currentState == 5)
         {
-            goForward(percent,1);
+            goForward(percent,3);
+            LCD.WriteLine("intersection!");
             leftMotor.Stop();
             rightMotor.Stop();
             break;
@@ -165,16 +167,18 @@ void followLineToIntersection(int percent)
                 return;
             }
             break;
-        case 1: // veering left, left and middle sensors are above threshold, turn right, left motor goes forward, right motor goes backward
+        case 1:
+        case 3: // veering left, left and middle sensors are above threshold, turn right, left motor goes faster
             isLost = false;
             lostLineTimer = 0.0;
             leftMotor.SetPercent(-percent);
-            rightMotor.SetPercent(-percent);
+            rightMotor.SetPercent(0);
             break;
-        case 4: // veering right, right and middle sensors are above threshold, turn left, left motor goes backward, right motor goes forward
+        case 4:
+        case 6: // veering right, right and middle sensors are above threshold, turn left, left motor goes backward, right motor goes forward
             isLost = false;
             lostLineTimer = 0.0;
-            leftMotor.SetPercent(percent);
+            leftMotor.SetPercent(0);
             rightMotor.SetPercent(percent);
             break;
         case 2: // on the line, all three sensors are above threshold, go straight
@@ -192,30 +196,37 @@ void ERCMain()
 {
     // Milestone 2
     // Step 1: Wait for the light, go backward and push the button, then orient towards the ramp, drive to the light at humidifier
-    //  while(cdsCell.Value() < 3){} //wait for the light to turn on
-    //  goForward(-50, 6); //go backward for 6 inches so that it hits the button
-    //  goForward(50, 3); //go forward for 3 inches to get off the button
-    //  turnRight(25,(45+18.7)); //45: from the tip of letter A to the corner facing the ramp, 18.7: from the corner facing the ramp to the center of the ramp
-    //  goForward(50,7.41);
-    //  turnLeft(25,(45+18.7)); //orient to front
-    //  goForward(50,12.5); //to the beginning of the line on the upper level
-    //  linefollowLineToIntersection(25); //follow the line until the first intersection, which is a T intersection with branch at thhe right
-    //  goForward(50, 1); //go forward a little bit to get off the intersection
-    //  linefollowLineToIntersection(25);
-    //  goForward(50, 3); //go forward a little bit to get light under cds cell
-    // while(1){
-    //     LCD.Clear();
-    //     LCD.WriteLine("left encoder counts: " + String(leftEncoder.Counts()));
-    //     LCD.WriteLine("right encoder counts: " + String(rightEncoder.Counts()));
-    //     goForward(25,6);
-    //     turnLeft(25,90);
-    //     goForward(-25,6);
-    //     turnRight(25,90);
-    // }
-    // LCD.WriteLine(optosensorLeft.Value());
-    // LCD.WriteLine(optosensorMiddle.Value());
-    // LCD.WriteLine(optosensorRight.Value());
-    // LCD.WriteLine(cdsCell.Value());
-    // TestGUI();
-    followLineToIntersection(25);
+    // while(cdsCell.Value() > 1){} //wait for the light to turn on
+    // LCD.WriteLine("light detected, starting!");
+     goForward(-75, 3); //go backward for 3 inches so that it hits the button
+     LCD.WriteLine("button pushed");
+     goForward(50, 1); //go forward for 1 inch to get off the button
+     LCD.WriteLine("getting off button");
+     turnRight(25,(45+18.7)); //45: from the tip of letter A to the corner facing the ramp, 18.7: from the corner facing the ramp to the center of the ramp
+     LCD.WriteLine("oriented towards ramp");
+     goForward(50,7.41);
+     LCD.WriteLine("at the beginning of the ramp");
+     turnLeft(25,(18.7)); //orient to front
+     LCD.WriteLine("oriented forward");
+     goForward(50,12.5); //to the beginning of the line on the upper level
+     LCD.WriteLine("on the line on upper level");
+     goForward(50,11.7);//follow the line until the first intersection, which is a T intersection with branch at thhe right
+     LCD.WriteLine("at the corner");
+     turnLeft(25,90); //turn left at the T intersection to face the ramp
+     LCD.WriteLine("turned left at the corner");
+     goForward(50, 15); //go forward a little bit to get off the intersection
+     LCD.WriteLine("reached LED");
+     while(cdsCell.Value() > 1){
+        leftMotor.SetPercent(20);
+        rightMotor.SetPercent(20);
+     } //keep going forward until it detects the light at the humidifier
+     leftMotor.Stop();
+     rightMotor.Stop();
+     LCD.WriteLine("light at humidifier detected");
+     if(cdsCell.Value()<0.5){
+        humidifierIsRed = true;
+        LCD.WriteLine("humidifier is red");
+     }
+     
+
 }
