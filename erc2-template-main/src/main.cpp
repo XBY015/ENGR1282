@@ -162,87 +162,156 @@ void turnRight(int percent, float angle) // left motor goes forward, right motor
     rightMotor.Stop();
 }
 
-// This function will follow the line until it hits a branch
+// Runtime thresholds, can be updated by calibration so local-only center line testing
+// and final field (black-white-black) can share one algorithm.
+float leftLineThreshold = LEFT_OPTOSENSOR_THRESHOLD;
+float middleLineThreshold = MIDDLE_OPTOSENSOR_THRESHOLD;
+float rightLineThreshold = RIGHT_OPTOSENSOR_THRESHOLD;
+
+// Automatically estimate line thresholds from current floor + black line.
+// Assumption: during calibration the robot is placed with middle sensor on black line.
+void calibrateLineThresholds(float safetyMargin)
+{
+    float leftFloor = optosensorLeft.Value();
+    float middleLine = optosensorMiddle.Value();
+    float rightFloor = optosensorRight.Value();
+
+    leftLineThreshold = (leftFloor + middleLine) * 0.5 + safetyMargin;
+    middleLineThreshold = middleLine - safetyMargin;
+    rightLineThreshold = (rightFloor + middleLine) * 0.5 + safetyMargin;
+
+    LCD.Clear();
+    LCD.WriteLine("Line threshold calibrated");
+    LCD.WriteLine(leftLineThreshold);
+    LCD.WriteLine(middleLineThreshold);
+    LCD.WriteLine(rightLineThreshold);
+    Sleep(0.8);
+}
+
+int readLineState()
+{
+    float leftValue = optosensorLeft.Value();
+    float middleValue = optosensorMiddle.Value();
+    float rightValue = optosensorRight.Value();
+
+    return ((leftValue > leftLineThreshold ? 1 : 0) << 2)
+           | ((middleValue > middleLineThreshold ? 1 : 0) << 1)
+           | ((rightValue > rightLineThreshold ? 1 : 0) << 0);
+}
+
+// One-wheel steering mode (no PID, no differential speed).
+// left motor sign is negative when moving robot forward.
+void driveStraightSimple(int percent)
+{
+    leftMotor.SetPercent(-percent);
+    rightMotor.SetPercent(percent);
+}
+
+void pivotLeftSimple(int percent)
+{
+    leftMotor.SetPercent(0);
+    rightMotor.SetPercent(percent);
+}
+
+void pivotRightSimple(int percent)
+{
+    leftMotor.SetPercent(-percent);
+    rightMotor.SetPercent(0);
+}
+
+// This function follows the line and supports both single-black-line practice field
+// and final field black-white-black pattern by using an adaptive state machine.
 void followLineToIntersection(int percent)
 {
+    const float LOST_LINE_TIMEOUT = 0.9;
+    const float INTERSECTION_HOLD_TIME = 0.12;
+
     float lostLineTimer = 0.0;
+    float allOnTimer = 0.0;
     bool isLost = false;
-
-    /*
-    State 0: 000, off the line (all sensors below threshold)
-    State 1: 001, veering left (left and middle sensors are above threshold)
-    State 4: 100, veering right (right and middle sensors are above threshold)
-    State 2: 010, on the line (all three sensors are above threshold)
-    State 7: 111, at an intersection (all three sensors are above threshold)
-    State 3: 011, at an T intersection (middle and right sensors are above threshold)
-    State 5: 101, at an T intersection (left and middle sensors are above threshold)
-    State 6: 110, at an T intersection (left and right sensors are above threshold)
-    */
-
-    // combine the three sensor readings into a 3 bit integer representing the current state
+    bool allOn = false;
+    int lastTurnDirection = 1; // 1 means last correction was right, -1 means left
 
     while (1)
-    { // keep following the line until hit an intersection
-        float leftValue = optosensorLeft.Value();
-        float middleValue = optosensorMiddle.Value();
-        float rightValue = optosensorRight.Value();
-        int currentState = ((leftValue > LEFT_OPTOSENSOR_THRESHOLD ? 1 : 0) << 2) // returns 1 if on line, 0 if off line
-                           | ((middleValue > MIDDLE_OPTOSENSOR_THRESHOLD ? 1 : 0) << 1) | ((rightValue > RIGHT_OPTOSENSOR_THRESHOLD ? 1 : 0) << 0);
-        // Debugs
-        LCD.Clear();
-        LCD.WriteLine(leftValue);
-        LCD.WriteLine(middleValue);
-        LCD.WriteLine(rightValue);
-        LCD.WriteLine(currentState);
-        LCD.WriteLine(isLost);
-        LCD.WriteLine(TimeNow() - lostLineTimer);
+    {
+        int currentState = readLineState();
 
-        if (currentState == 7 || currentState == 5)
+        // 111 usually means branch/intersection in final field. Require persistence to
+        // avoid false trigger when passing over edge noise.
+        if (currentState == 7)
         {
-            goForward(percent, 3);
-            LCD.WriteLine("intersection!");
-            leftMotor.Stop();
-            rightMotor.Stop();
-            break;
+            if (!allOn)
+            {
+                allOn = true;
+                allOnTimer = TimeNow();
+            }
+            else if (TimeNow() - allOnTimer > INTERSECTION_HOLD_TIME)
+            {
+                leftMotor.Stop();
+                rightMotor.Stop();
+                return;
+            }
+        }
+        else
+        {
+            allOn = false;
         }
 
         switch (currentState)
         {
-        case 0:
+        case 2: // 010 centered
+            isLost = false;
+            driveStraightSimple(percent);
+            break;
+
+        case 6: // 110 line appears on left + middle, robot drifted right -> steer left
+        case 4: // 100 far right drift
+            isLost = false;
+            lastTurnDirection = -1;
+            pivotLeftSimple(percent);
+            break;
+
+        case 3: // 011 line appears on right + middle, robot drifted left -> steer right
+        case 1: // 001 far left drift
+            isLost = false;
+            lastTurnDirection = 1;
+            pivotRightSimple(percent);
+            break;
+
+        case 5: // 101 usually black-white-black border in final field
+            // Treat as centered region and keep going instead of mis-detecting intersection.
+            isLost = false;
+            driveStraightSimple(percent);
+            break;
+
+        case 0: // 000 lost the line completely
+        default:
             if (!isLost)
             {
                 lostLineTimer = TimeNow();
                 isLost = true;
             }
-            else if (TimeNow() - lostLineTimer > 1)
-            { // if it's been off the line for more than 0.5 seconds, stop and break out of the loop
+
+            if (TimeNow() - lostLineTimer > LOST_LINE_TIMEOUT)
+            {
                 leftMotor.Stop();
                 rightMotor.Stop();
                 return;
             }
-            break;
-        case 1:
-        case 3: // veering left, left and middle sensors are above threshold, turn right, left motor goes faster
-            isLost = false;
-            lostLineTimer = 0.0;
-            leftMotor.SetPercent(-percent);
-            rightMotor.SetPercent(0);
-            break;
-        case 4:
-        case 6: // veering right, right and middle sensors are above threshold, turn left, left motor goes backward, right motor goes forward
-            isLost = false;
-            lostLineTimer = 0.0;
-            leftMotor.SetPercent(0);
-            rightMotor.SetPercent(percent);
-            break;
-        case 2: // on the line, all three sensors are above threshold, go straight
-            isLost = false;
-            lostLineTimer = 0.0;
-            leftMotor.SetPercent(-percent);
-            rightMotor.SetPercent(percent);
+
+            // keep searching by continuing the last correction direction
+            if (lastTurnDirection > 0)
+            {
+                pivotRightSimple(percent);
+            }
+            else
+            {
+                pivotLeftSimple(percent);
+            }
             break;
         }
-        Sleep(0.05);
+
+        Sleep(0.03);
     }
 }
 
@@ -317,6 +386,9 @@ void ERCMain()
     //  Sleep(2.0);
     //  turnServoByAngle(50);
     //  LCD.WriteLine("turned servo by 20 degrees");
+
+
+    calibrateLineThresholds(0.12);
 
     // Milestone 2
     // Step 1: Wait for the light, go backward and push the button, then orient towards the ramp, drive to the light at humidifier
