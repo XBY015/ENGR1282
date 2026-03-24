@@ -434,30 +434,30 @@ void followLinePID(float base_percent)
     bool isLost = false;
     bool allOn = false;
 
-    // PID 常数 (需要根据你的小车重量和基础速度重新调参)
-    // 这里的参数是示意值，需要你在赛道上实测微调
-    const float Kp = 13; // 比例项：每次偏离给多少基础差速, percent设为25时有8
-    const float Ki = 0.02; // 积分项：纠正长期偏离（比如电机天生左右不平衡）
-    const float Kd = 0.7; // 微分项：预测趋势，抵抗转弯时的惯性，减少左右“画龙”
+    //PID constants
+    const float Kp = 13; // Kp, base speed variance for every error, change this first if the robot is not responsive enough or too responsive
+    const float Ki = 0.02; // Ki, integral term: corrects long-term deviation (e.g., motor imbalance)
+    const float Kd = 0.7; // Kd, derivative term: predicts trend, resists inertia during turns, reduces left-right "drawing"
 
     float error = 0.0;
     float last_error = 0.0;
     float integral = 0.0;
     float derivative = 0.0;
 
-    const float MAX_SPEED = base_percent;
-    const float MID_SPEED = 35; // 转弯时内侧轮的基础速度
-    const float MIN_SPEED = 25;
+    const float MAX_SPEED = base_percent; //base speed for straight line
+    const float MID_SPEED = 35; // base speed for inner wheels when turning
+    const float MIN_SPEED = 25; //base speed for inner wheels when sharp turning
 
     while (1)
     {
         //LCD.Clear();
-        // 可以在测试时取消注释下面这行来观察 Error
         LCD.WriteLine(error);
 
         int currentState = readLineState();
 
-        // 1. 处理十字路口 (111 / 状态 7)
+        // 1. cross road: ---
+        //                 |
+        // 
         if (currentState == 7)
         {
             if (!allOn)
@@ -477,34 +477,34 @@ void followLinePID(float base_percent)
             allOn = false;
         }
 
-        // 2. 将状态转化为 Error (误差)
+        // making current position to error value for PID to process
         switch (currentState)
         {
-        case 2: // 010: 完美居中
+        case 2: // 010: centered
             error = 0;
             isLost = false;
             break;
-        case 6: // 110: 偏右一点，需要左转 (左轮减速，右轮加速)
+        case 6: // 110: veer right, need to turn left
             error = 1;
             isLost = false;
             break;
-        case 4: // 100: 偏右很多，需要强力左转
+        case 4: // 100: veering right a lot, need to turn left hard
             error = 2;
             isLost = false;
             break;
-        case 3: // 011: 偏左一点，需要右转
+        case 3: // 011: veering left a bit, need to turn right
             error = -1;
             isLost = false;
             break;
-        case 1: // 001: 偏左很多，需要强力右转
+        case 1: // 001: veering left a lot, need to turn right hard
             error = -2;
             isLost = false;
             break;
-        case 5: // 101: 可能是外侧黑线干扰，当做居中处理
+        case 5: // 101: not likely, but if happens might be at a border of line, treat as centered
             error = 0;
             isLost = false;
             break;
-        case 0: // 000: 丢线了
+        case 0: // 000: lost line
         default:
             if (!isLost)
             {
@@ -518,8 +518,6 @@ void followLinePID(float base_percent)
                 LCD.WriteLine("Line lost, stopping.");
                 return;
             }
-            // 注意：这里没有改变 error 的值！
-            // 这意味着如果丢线了，PID 会保持上一次的 error 继续猛烈打方向去找线，这保留了你原先的寻线逻辑。
             break;
         }
 
@@ -532,8 +530,7 @@ void followLinePID(float base_percent)
             current_base_speed = MIN_SPEED;
         }
 
-        // 3. 计算 PID 补偿值 (Adjustment)
-        // 为了防止积分限幅 (Integral Windup) 导致转弯过猛，可以在 error 为 0 时清空积分
+        //PID calculations
         if (error == 0)
         {
             integral = 0;
@@ -545,16 +542,15 @@ void followLinePID(float base_percent)
 
         derivative = error - last_error;
 
-        // 核心公式：计算总的修正力度
+        //overall adjustments based on PID terms
         float adjustment = (Kp * error) + (Ki * integral) + (Kd * derivative);
 
-        // 4. 将修正力度转化为左右轮的差速
-        // 如果 error > 0 (需要左转)，adjustment 为正。我们需要降低左轮速度，增加右轮速度
+        // making adjustment to motor power
+        // if error is positive, means we need to turn left, so left motor should be slower than right motor
         float left_power = current_base_speed - adjustment;
         float right_power = current_base_speed + adjustment;
 
-        // 5. 限制功率边界
-        // 注意：如果你希望转弯时内侧轮子可以反转（原地急转），可以把最小值设为负数，比如 -20.0
+        // limiting power to be between 0 and 100
         if (left_power > 100.0)
             left_power = 100.0;
         if (left_power < 0.0)
@@ -564,11 +560,9 @@ void followLinePID(float base_percent)
         if (right_power < 0.0)
             right_power = 0.0;
 
-        // 6. 赋值给电机 (保留你左电机反向的逻辑)
         leftMotor.SetPercent(-left_power);
         rightMotor.SetPercent(right_power);
 
-        // 7. 记录上一次的 error，供下一帧计算微分项 (D) 使用
         last_error = error;
 
         Sleep(0.01);
