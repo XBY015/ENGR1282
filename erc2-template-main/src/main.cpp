@@ -625,7 +625,7 @@ void hitButton(int percent, int angle)
 void ERCMain()
 {
     // calibrateLineThresholds(0.12);
-   // Milestone 2
+   // Milestone 3
     // Step 1: Wait for the light, go backward and push the button, then orient towards the ramp, drive to the light at humidifier
  while (cdsCell.Value() > 1)
     {
