@@ -204,7 +204,7 @@ void upRamp(int percent, float distance)
 
     // Set motors to desired percent
     leftMotor.SetPercent(-percent);
-    rightMotor.SetPercent(percent + 7);
+    rightMotor.SetPercent(percent);
 
     // Keeps moving forward until the average of the two encoders reaches the target counts
     while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
@@ -625,7 +625,65 @@ void hitButton(int percent, int angle)
 void ERCMain()
 {
     // calibrateLineThresholds(0.12);
-    followLinePID(50);
+   // Milestone 2
+    // Step 1: Wait for the light, go backward and push the button, then orient towards the ramp, drive to the light at humidifier
+ while (cdsCell.Value() > 1)
+    {
+    } // wait for the light to turn on
+    LCD.WriteLine("light detected, starting!");
+    goForward(-75, 3); // go backward for 3 inches so that it hits the button
+    LCD.WriteLine("button pushed");
+    goForward(50, 1); // go forward for 1 inch to get off the button
+    LCD.WriteLine("getting off button");
+    turnRight(25, (45 + 10)); // 45: from the tip of letter A to the corner facing the ramp, 18.7: from the corner facing the ramp to the center of the ramp
+    LCD.WriteLine("oriented towards ramp");
+    goForward(50, 14);
+    LCD.WriteLine("reached the beginning of the ramp");
+    turnLeft(25,(18.5)); //orient to front
+    LCD.WriteLine("oriented forward");
+    upRamp(50, 18); // to the beginning of the line on the upper level
+    LCD.WriteLine("on the line on upper level");
+    goForward(50, 4.1);
+    LCD.WriteLine("at the top");
+    turnLeft(25, 103); // turn left at the T intersection to face the ramp
+    LCD.WriteLine("turned left ");
+    goForward(65, 17);
+    LCD.WriteLine("reached before the light");
+    // bonus
+    /* 
+    goForward(-65, 3);
+    LCD.WriteLine("back up");
+    turnRight(15, 18);
+    LCD.WriteLine("turn");
+    goForward(50, 2);
+    LCD.WriteLine("adjust");
+    turnLeft(15, 30);
+    LCD.WriteLine("turn");
+    goForward(50, 2);
+    LCD.WriteLine("adjust");
+    turnRight(15, 8);
+    LCD.WriteLine("straighten up");
+    goForward(-50, 15);
+    LCD.WriteLine("revere");
+    */
+    Sleep(2.0);
+
+    // Bonus: get back to the starting point
+    // LCD.Clear();
+    // turnLeft(25, 200);
+    // LCD.WriteLine("turned around");
+    // goForward(50, 18);
+    // LCD.WriteLine("reached corner");
+    // turnRight(25, 90);
+    // LCD.WriteLine("oriented towards ramp");
+    // goForward(50, 11.7);
+    // LCD.WriteLine("reached the lower level");
+    // goForward(50, 16);
+    // LCD.WriteLine("reached the letter");
+    // turnRight(25, 45 + 18.7);
+    // LCD.WriteLine("oriented towards button");
+    // goForward(50, 2);
+    // LCD.WriteLine("pushed button")
     // goForwardPID(10,30);
 }
 // min at full speed 884
