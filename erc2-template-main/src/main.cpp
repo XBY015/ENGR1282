@@ -8,6 +8,7 @@ FEHMotor rightMotor(FEHMotor::Motor0, 6.0);
 DigitalEncoder leftEncoder(FEHIO::Pin10);
 DigitalEncoder rightEncoder(FEHIO::Pin8);
 FEHServo humidifierServo(FEHServo::Servo0);
+FEHServo compostServo(FEHServo::Servo3);
 
 // Sensor declarations
 AnalogInputPin optosensorLeft(FEHIO::Pin0);
@@ -621,7 +622,19 @@ void hitButton(int percent, int angle)
         rightMotor.Stop();
     }
 }
+void compostTurn(){
+    compostServo.SetMin(998); 
+    compostServo.SetMax(1852); 
 
+    compostServo.SetDegree(0);
+    Sleep(2.0);
+
+    compostServo.SetDegree(270);
+    Sleep(2.0);
+
+    compostServo.SetDegree(0);
+    Sleep(2.0);
+}
 void ERCMain()
 {
     // calibrateLineThresholds(0.12);
