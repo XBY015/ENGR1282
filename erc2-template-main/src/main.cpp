@@ -1,4 +1,5 @@
 #include <FEH.h>
+#include <FEHServo.h>
 #include <Arduino.h>
 // githubtest
 
@@ -8,12 +9,13 @@ FEHMotor rightMotor(FEHMotor::Motor0, 6.0);
 DigitalEncoder leftEncoder(FEHIO::Pin10);
 DigitalEncoder rightEncoder(FEHIO::Pin8);
 FEHServo humidifierServo(FEHServo::Servo0);
+FEHServo sideArmServo(FEHServo::Servo1);
 FEHServo compostServo(FEHServo::Servo3);
 
 // Sensor declarations
-AnalogInputPin optosensorLeft(FEHIO::Pin0);
+AnalogInputPin optosensorLeft(FEHIO::Pin4);
 AnalogInputPin optosensorMiddle(FEHIO::Pin2);
-AnalogInputPin optosensorRight(FEHIO::Pin4);
+AnalogInputPin optosensorRight(FEHIO::Pin0);
 AnalogInputPin cdsCell(FEHIO::Pin6);
 
 // Variables
@@ -24,7 +26,7 @@ bool humidifierIsRed = false; // keep track of whether the humidifier light is r
 const float WHEEL_DIAMETER = 3.0;                                                          // in inches
 const float ENCODER_COUNTS_PER_REVOLUTION = 318;                                           // ticks per revolution of the wheel
 const float INCHES_PER_COUNT = (WHEEL_DIAMETER * 3.14159) / ENCODER_COUNTS_PER_REVOLUTION; // inches traveled per encoder tick
-const float ROBOT_WIDTH = 7.15;
+const float ROBOT_WIDTH = 5.748; //in inches
 const float SERVO_BANDWIDTH = 20;
 const float SECONDS_PER_DEGREE_NEG = 0.0023;  // 0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
 const float SECONDS_PER_DEGREE_POS = 0.00175; // 0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
@@ -34,168 +36,11 @@ const float MIDDLE_OPTOSENSOR_THRESHOLD = 4; // threshold value for middle optos
 const float RIGHT_OPTOSENSOR_THRESHOLD = 4;  // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float CDS_CELL_RED_THRESHOLD = 0.48;   // threshold value for cds cell to determine if the humidifier light is red or blue (red light will have a value below this threshold, blue light will have a value above this threshold)
 
-// enums
-//  enum INTERSECTION_TYPE{
-//      FRONT_T_INTERSECTION,
-//      RIGHT_T_INTERSECTION
-//  }
-//  enum ACTION_AT_INTERSECTION{
-//      GO_STRAIGHT,
-//      TURN_LEFT,
-//      TURN_RIGHT
-//  }
 
 // Function declarations
-void setServoSpeed(int percent)
-{
-    // int degree = 90+(percent*SERVO_BANDWIDTH/100);
-    int degree = 90 + (percent * 90 / 100);
-    humidifierServo.SetDegree(degree);
-}
-void turnServoByAngle(float angle)
-{
-    if (angle == 0)
-        return;
-    int operatingSpeed = 50;
-    float timeToWait = 0.0;
-    if (angle < 0)
-    {
-        operatingSpeed = -50;
-        timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
-    }
-    else
-    {
-        operatingSpeed = 50;
-        timeToWait = angle * SECONDS_PER_DEGREE_POS;
-    }
-    setServoSpeed(operatingSpeed);
-    Sleep(timeToWait);
-    setServoSpeed(0);
-}
-
+//1. Movement functions
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
-void goForward(int percent, float distance)
-{
-    // Calculate the number of encoder counts needed to travel the specified distance
-    int targetCounts = distance / INCHES_PER_COUNT;
-
-    // Reset encoders
-    leftEncoder.ResetCounts();
-    rightEncoder.ResetCounts();
-
-    // Set motors to desired percent
-    leftMotor.SetPercent(-percent);
-    rightMotor.SetPercent(percent);
-
-    // Keeps moving forward until the average of the two encoders reaches the target counts
-    while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
-    {
-    }
-
-    // Stop motors
-    leftMotor.Stop();
-    rightMotor.Stop();
-}
-void goForwardPID(float inch_per_sec, float distance)
-{
-    const float P_CONSTANT = 0.75; // P term, the higher the value the more aggressively the controller will correct for current error
-    const float I_CONSTANT = 0.05; // I term, the higher the value the more it will correct for accumulated past error (helps with systematic bias like weight imbalance)
-    const float D_CONSTANT = 0.25; // D term, the higher the value the more it will correct for rate of change of error (helps with preventing overshoot)
-    const float SLEEP_TIME = 0.1;  // Sleep time between iterations, 0.1 to 0.2 seconds is generally safe
-
-    // 2. 计算目标总编码器计数
-    int targetCounts = distance / INCHES_PER_COUNT;
-
-    // 3. 初始化 PID 所需的变量
-    float left_power = inch_per_sec; // 初始给一个基础功率猜测值
-    float right_power = inch_per_sec;
-
-    float left_error = 0.0, right_error = 0.0;
-    float left_error_sum = 0.0, right_error_sum = 0.0;
-    float left_last_error = 0.0, right_last_error = 0.0;
-
-    int left_last_counts = 0, right_last_counts = 0;
-    float last_time = TimeNow();
-
-    // 4. 重置编码器
-    leftEncoder.ResetCounts();
-    rightEncoder.ResetCounts();
-
-    // 为了避免第一次循环时时间差 (Delta Time) 为 0 导致除以 0 的错误，先短暂等待 [cite: 111, 120]
-    Sleep(SLEEP_TIME);
-
-    // 5. 主控制循环：当左右编码器的平均值还没有达到目标距离时，持续调节
-    while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
-    {
-        float current_time = TimeNow();
-        float delta_time = current_time - last_time;
-
-        // 安全保护：防止极小概率下的除零崩溃
-        if (delta_time <= 0.0)
-            delta_time = 0.001;
-
-        int current_left_counts = abs(leftEncoder.Counts());
-        int current_right_counts = abs(rightEncoder.Counts());
-
-        int delta_left_counts = current_left_counts - left_last_counts;
-        int delta_right_counts = current_right_counts - right_last_counts;
-
-        // 步骤 A：计算当前的实际速度 (Actual Velocity) [cite: 41, 125]
-        float left_actual_speed = INCHES_PER_COUNT * ((float)delta_left_counts / delta_time);
-        float right_actual_speed = INCHES_PER_COUNT * ((float)delta_right_counts / delta_time);
-
-        // 步骤 B：计算误差 (Error) = 期望速度 - 实际速度 [cite: 49, 126]
-        left_error = inch_per_sec - left_actual_speed;
-        right_error = inch_per_sec - right_actual_speed;
-
-        // 步骤 C：累加误差 (Error Sum) 供积分项使用 [cite: 63, 127]
-        left_error_sum += left_error;
-        right_error_sum += right_error;
-
-        // 步骤 D：分别计算 P、I、D 三个补偿项 [cite: 128, 129, 130]
-        float left_P = left_error * P_CONSTANT;
-        float left_I = left_error_sum * I_CONSTANT;
-        float left_D = (left_error - left_last_error) * D_CONSTANT;
-
-        float right_P = right_error * P_CONSTANT;
-        float right_I = right_error_sum * I_CONSTANT;
-        float right_D = (right_error - right_last_error) * D_CONSTANT;
-
-        // 步骤 E：计算新的电机输出功率 = 旧功率 + P + I + D [cite: 54, 134]
-        left_power = left_power + left_P + left_I + left_D;
-        right_power = right_power + right_P + right_I + right_D;
-
-        // 步骤 F：限制功率边界，防止功率超出 0-100% 的合法区间
-        if (left_power > 100.0)
-            left_power = 100.0;
-        if (left_power < 5.0)
-            left_power = 5.0; // 留一点底线防止卡死
-        if (right_power > 100.0)
-            right_power = 100.0;
-        if (right_power < 5.0)
-            right_power = 5.0;
-
-        // 步骤 G：赋值给电机。根据你的硬件结构，左轮设为负值以向前行驶 [cite: 148]
-        leftMotor.SetPercent(-left_power);
-        rightMotor.SetPercent(right_power);
-
-        // 步骤 H：保存当前状态，供下一次循环的微积分计算使用 [cite: 131]
-        left_last_error = left_error;
-        right_last_error = right_error;
-        left_last_counts = current_left_counts;
-        right_last_counts = current_right_counts;
-        last_time = current_time;
-
-        // 等待一段时间再进行下一次采样和计算 [cite: 139]
-        Sleep(SLEEP_TIME);
-    }
-
-    // 循环结束，到达目标距离，停止电机 [cite: 112]
-    leftMotor.Stop();
-    rightMotor.Stop();
-}
-void upRamp(int percent, float distance)
-{
+void goForward(int percent, float distance){
     // Calculate the number of encoder counts needed to travel the specified distance
     int targetCounts = distance / INCHES_PER_COUNT;
 
@@ -261,31 +106,50 @@ void turnRight(int percent, float angle) // left motor goes forward, right motor
     rightMotor.Stop();
 }
 
+void pivotLeft(int percent, float angle) // right motor goes forward, left motor stops
+{
+    // Calculate the number of encoder counts needed to turn the specified angle
+    int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH*2 / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
+
+    // Reset encoders
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+
+    // Set motors to desired percent (left motor goes backward, right motor goes forward)
+    leftMotor.SetPercent(0);
+    rightMotor.SetPercent(percent);
+
+    // Keeps turning until the average of the two encoders reaches the target counts
+    while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
+    {
+    }
+
+    // Stop motors
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+void pivotRight(int percent, float angle)
+{
+    // Calculate the number of encoder counts needed to turn the specified angle
+    int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH*2 / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
+
+    // Reset encoders
+    leftEncoder.ResetCounts();
+    rightEncoder.ResetCounts();
+
+    // Set motors to desired percent (left motor goes forward, right motor goes backward)
+
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(0);
+}
+
+
+//2. Line following functions
 // Runtime thresholds, can be updated by calibration so local-only center line testing
 // and final field (black-white-black) can share one algorithm.
 float leftLineThreshold = LEFT_OPTOSENSOR_THRESHOLD;
 float middleLineThreshold = MIDDLE_OPTOSENSOR_THRESHOLD;
 float rightLineThreshold = RIGHT_OPTOSENSOR_THRESHOLD;
-
-// Automatically estimate line thresholds from current floor + black line.
-// Assumption: during calibration the robot is placed with middle sensor on black line.
-void calibrateLineThresholds(float safetyMargin)
-{
-    float leftFloor = optosensorLeft.Value();
-    float middleLine = optosensorMiddle.Value();
-    float rightFloor = optosensorRight.Value();
-
-    leftLineThreshold = (leftFloor + middleLine) * 0.5 + safetyMargin;
-    middleLineThreshold = middleLine - safetyMargin;
-    rightLineThreshold = (rightFloor + middleLine) * 0.5 + safetyMargin;
-
-    LCD.Clear();
-    LCD.WriteLine("Line threshold calibrated");
-    LCD.WriteLine(leftLineThreshold);
-    LCD.WriteLine(middleLineThreshold);
-    LCD.WriteLine(rightLineThreshold);
-}
-
 int readLineState()
 {
     float leftValue = optosensorLeft.Value();
@@ -295,21 +159,7 @@ int readLineState()
     return ((leftValue > leftLineThreshold ? 1 : 0) << 2) | ((middleValue > middleLineThreshold ? 1 : 0) << 1) | ((rightValue > rightLineThreshold ? 1 : 0) << 0);
 }
 
-// One-wheel steering mode (no PID, no differential speed).
-// left motor sign is negative when moving robot forward.
-void driveStraightSimple(int percent)
-{
-    leftMotor.SetPercent(-percent);
-    rightMotor.SetPercent(percent);
-}
 
-void pivotLeftSimple(int percent)
-{
-    leftMotor.SetPercent(0);
-    rightMotor.SetPercent(percent);
-}
-
-void pivotRightSimple(int percent)
 {
     leftMotor.SetPercent(-percent);
     rightMotor.SetPercent(0);
@@ -325,140 +175,49 @@ state 5: 101, left + right sensor on line, not likely to happen, if that's the c
 state 6: 110, left + middle sensor on line, veering right or at a left branch
 state 7: 111, all sensors on line, probably at an intersection, stop
 */
-void followLine(int percent) // currently working, need to add PID
-{
-    const float LOST_LINE_TIMEOUT = 0.9;
-    const float INTERSECTION_HOLD_TIME = 0.12;
-
-    float lostLineTimer = 0.0;
-    float allOnTimer = 0.0;
-    bool isLost = false;
-    bool allOn = false;
-    int lastTurnDirection = 1; // 1 means last correction was right, -1 means left
-
-    while (1)
-    {
-        LCD.Clear();
-        LCD.WriteLine(optosensorLeft.Value());
-        LCD.WriteLine(optosensorMiddle.Value());
-        LCD.WriteLine(optosensorRight.Value());
-        LCD.WriteLine(readLineState());
-
-        int currentState = readLineState();
-
-        // 111 usually means branch/intersection in final field. Require persistence to
-        // avoid false trigger when passing over edge noise.
-        if (currentState == 7)
-        {
-            if (!allOn)
-            {
-                allOn = true;
-                allOnTimer = TimeNow();
-            }
-            else if (TimeNow() - allOnTimer > INTERSECTION_HOLD_TIME)
-            {
-                leftMotor.Stop();
-                rightMotor.Stop();
-                return;
-            }
-        }
-        else
-        {
-            allOn = false;
-        }
-
-        switch (currentState)
-        {
-        case 2: // 010 centered
-            isLost = false;
-            driveStraightSimple(percent);
-            break;
-
-        case 6: // 110 line appears on left + middle, robot drifted right -> steer left
-        case 4: // 100 far right drift
-            isLost = false;
-            lastTurnDirection = -1;
-            pivotLeftSimple(percent);
-            break;
-
-        case 3: // 011 line appears on right + middle, robot drifted left -> steer right
-        case 1: // 001 far left drift
-            isLost = false;
-            lastTurnDirection = 1;
-            pivotRightSimple(percent);
-            break;
-
-        case 5: // 101 usually black-white-black border in final field
-            // Treat as centered region and keep going instead of mis-detecting intersection.
-            isLost = false;
-            driveStraightSimple(percent);
-            break;
-
-        case 0: // 000 lost the line completely
-        default:
-            if (!isLost)
-            {
-                lostLineTimer = TimeNow();
-                isLost = true;
-            }
-
-            if (TimeNow() - lostLineTimer > LOST_LINE_TIMEOUT)
-            {
-                leftMotor.Stop();
-                rightMotor.Stop();
-                return;
-            }
-
-            // keep searching by continuing the last correction direction
-            if (lastTurnDirection > 0)
-            {
-                pivotRightSimple(percent);
-            }
-            else
-            {
-                pivotLeftSimple(percent);
-            }
-            break;
-        }
-
-        Sleep(0.03);
-    }
-}
-
 void followLinePID(float base_percent)
 {
     const float LOST_LINE_TIMEOUT = 0.9;
-    const float INTERSECTION_HOLD_TIME = 0.12;
+    const float INTERSECTION_HOLD_TIME = 0.2;
 
     float lostLineTimer = 0.0;
     float allOnTimer = 0.0;
     bool isLost = false;
     bool allOn = false;
 
-    //PID constants
-    const float Kp = 13; // Kp, base speed variance for every error, change this first if the robot is not responsive enough or too responsive
-    const float Ki = 0.02; // Ki, integral term: corrects long-term deviation (e.g., motor imbalance)
-    const float Kd = 0.7; // Kd, derivative term: predicts trend, resists inertia during turns, reduces left-right "drawing"
+    // PID constants
+    const float Kp = 15;   // Kp, base speed variance for every error, change this first if the robot is not responsive enough or too responsive
+    const float Ki = 0.03; // Ki, integral term: corrects long-term deviation (e.g., motor imbalance)
+    const float Kd = 0.7;  // Kd, derivative term: predicts trend, resists inertia during turns, reduces left-right "drawing"
 
     float error = 0.0;
     float last_error = 0.0;
     float integral = 0.0;
     float derivative = 0.0;
 
-    const float MAX_SPEED = base_percent; //base speed for straight line
-    const float MID_SPEED = 35; // base speed for inner wheels when turning
-    const float MIN_SPEED = 25; //base speed for inner wheels when sharp turning
+    const float MAX_SPEED = base_percent;       // base speed for straight line
+    const float MID_SPEED = base_percent * 0.7; // base speed for inner wheels when turning
+    const float MIN_SPEED = base_percent * 0.3; // base speed for inner wheels when sharp turning
 
     while (1)
     {
-        //LCD.Clear();
+        LCD.Clear();
+        LCD.WriteLine("Error:");
         LCD.WriteLine(error);
+        LCD.WriteLine("current state:");
+        LCD.WriteLine(readLineState());
+        LCD.WriteLine("Left sensor:");
+        LCD.WriteLine(optosensorLeft.Value());
+        LCD.WriteLine("Middle sensor:");
+        LCD.WriteLine(optosensorMiddle.Value());
+        LCD.WriteLine("Right sensor:");
+        LCD.WriteLine(optosensorRight.Value());
 
         int currentState = readLineState();
 
         // 1. cross road: ---
         //                 |
-        // 
+        //
         if (currentState == 7)
         {
             if (!allOn)
@@ -468,6 +227,8 @@ void followLinePID(float base_percent)
             }
             else if (TimeNow() - allOnTimer > INTERSECTION_HOLD_TIME)
             {
+                LCD.WriteLine("Intersection!");
+                LCD.WriteLine(TimeNow() - allOnTimer);
                 leftMotor.Stop();
                 rightMotor.Stop();
                 return;
@@ -505,6 +266,9 @@ void followLinePID(float base_percent)
             error = 0;
             isLost = false;
             break;
+        case 7:
+            isLost = false;
+            break;
         case 0: // 000: lost line
         default:
             if (!isLost)
@@ -523,15 +287,20 @@ void followLinePID(float base_percent)
         }
 
         float current_base_speed = 0;
-        if(error==0){
+        if (error == 0)
+        {
             current_base_speed = MAX_SPEED;
-        }else if(abs(error)==1){
+        }
+        else if (abs(error) == 1)
+        {
             current_base_speed = MID_SPEED;
-        }else{
+        }
+        else
+        {
             current_base_speed = MIN_SPEED;
         }
 
-        //PID calculations
+        // PID calculations
         if (error == 0)
         {
             integral = 0;
@@ -543,13 +312,17 @@ void followLinePID(float base_percent)
 
         derivative = error - last_error;
 
-        //overall adjustments based on PID terms
+        // overall adjustments based on PID terms
         float adjustment = (Kp * error) + (Ki * integral) + (Kd * derivative);
 
         // making adjustment to motor power
         // if error is positive, means we need to turn left, so left motor should be slower than right motor
         float left_power = current_base_speed - adjustment;
         float right_power = current_base_speed + adjustment;
+        LCD.WriteLine("Left power:");
+        LCD.WriteLine(left_power);
+        LCD.WriteLine("Right power:");
+        LCD.WriteLine(right_power);
 
         // limiting power to be between 0 and 100
         if (left_power > 100.0)
@@ -622,85 +395,14 @@ void hitButton(int percent, int angle)
         rightMotor.Stop();
     }
 }
-void compostTurn(){
-    compostServo.SetMin(998); 
-    compostServo.SetMax(1852); 
 
-    compostServo.SetDegree(0);
-    Sleep(2.0);
-
-    compostServo.SetDegree(270);
-    Sleep(2.0);
-
-    compostServo.SetDegree(0);
-    Sleep(2.0);
-}
 void ERCMain()
-{
-    // calibrateLineThresholds(0.12);
-   // Milestone 3
-    // Step 1: Wait for the light, go backward and push the button, then orient towards the ramp, drive to the light at humidifier
- while (cdsCell.Value() > 1)
+{ // initialize
+    sideArmServo.SetMin(588);
+    sideArmServo.SetMax(2120);
+    // RCS.InitializeTouchMenu("CODE");
+    // TestGUI();
+    while (cdsCell.Value() > 1)
     {
     } // wait for the light to turn on
-    LCD.WriteLine("light detected, starting!");
-    goForward(-75, 3); // go backward for 3 inches so that it hits the button
-    LCD.WriteLine("button pushed");
-    goForward(50, 1); // go forward for 1 inch to get off the button
-    LCD.WriteLine("getting off button");
-    turnRight(25, (45 + 10)); // 45: from the tip of letter A to the corner facing the ramp, 18.7: from the corner facing the ramp to the center of the ramp
-    LCD.WriteLine("oriented towards ramp");
-    goForward(50, 14);
-    LCD.WriteLine("reached the beginning of the ramp");
-    turnLeft(25,(18.5)); //orient to front
-    LCD.WriteLine("oriented forward");
-    upRamp(50, 18); // to the beginning of the line on the upper level
-    LCD.WriteLine("on the line on upper level");
-    goForward(50, 4.1);
-    LCD.WriteLine("at the top");
-    turnLeft(25, 103); // turn left at the T intersection to face the ramp
-    LCD.WriteLine("turned left ");
-    goForward(65, 17);
-    LCD.WriteLine("reached before the light");
-    // bonus
-    /* 
-    goForward(-65, 3);
-    LCD.WriteLine("back up");
-    turnRight(15, 18);
-    LCD.WriteLine("turn");
-    goForward(50, 2);
-    LCD.WriteLine("adjust");
-    turnLeft(15, 30);
-    LCD.WriteLine("turn");
-    goForward(50, 2);
-    LCD.WriteLine("adjust");
-    turnRight(15, 8);
-    LCD.WriteLine("straighten up");
-    goForward(-50, 15);
-    LCD.WriteLine("revere");
-    */
-    Sleep(2.0);
-
-    // Bonus: get back to the starting point
-    // LCD.Clear();
-    // turnLeft(25, 200);
-    // LCD.WriteLine("turned around");
-    // goForward(50, 18);
-    // LCD.WriteLine("reached corner");
-    // turnRight(25, 90);
-    // LCD.WriteLine("oriented towards ramp");
-    // goForward(50, 11.7);
-    // LCD.WriteLine("reached the lower level");
-    // goForward(50, 16);
-    // LCD.WriteLine("reached the letter");
-    // turnRight(25, 45 + 18.7);
-    // LCD.WriteLine("oriented towards button");
-    // goForward(50, 2);
-    // LCD.WriteLine("pushed button")
-    // goForwardPID(10,30);
 }
-// min at full speed 884
-// max at full speed 1876
-// stop point 1450
-// clkwise width: 1450-1380=70
-// counterclkwise width: 1526-1450=76
