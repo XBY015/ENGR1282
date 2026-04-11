@@ -26,21 +26,22 @@ bool humidifierIsRed = false; // keep track of whether the humidifier light is r
 const float WHEEL_DIAMETER = 3.0;                                                          // in inches
 const float ENCODER_COUNTS_PER_REVOLUTION = 318;                                           // ticks per revolution of the wheel
 const float INCHES_PER_COUNT = (WHEEL_DIAMETER * 3.14159) / ENCODER_COUNTS_PER_REVOLUTION; // inches traveled per encoder tick
-const float ROBOT_WIDTH = 5.748; //in inches
-const float SERVO_BANDWIDTH = 20;
-const float SECONDS_PER_DEGREE_NEG = 0.0023;  // 0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
-const float SECONDS_PER_DEGREE_POS = 0.00175; // 0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
-// const float ROBOT_LENGTH; //distance from the center of the robot to the front in inches
-const float LEFT_OPTOSENSOR_THRESHOLD = 4;   // threshold value for left optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
-const float MIDDLE_OPTOSENSOR_THRESHOLD = 4; // threshold value for middle optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
-const float RIGHT_OPTOSENSOR_THRESHOLD = 4;  // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
-const float CDS_CELL_RED_THRESHOLD = 0.48;   // threshold value for cds cell to determine if the humidifier light is red or blue (red light will have a value below this threshold, blue light will have a value above this threshold)
-
+const float ROBOT_WIDTH = 5.748;                                                           // in inches
+const float LEFT_OPTOSENSOR_THRESHOLD = 4;                                                 // threshold value for left optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
+const float MIDDLE_OPTOSENSOR_THRESHOLD = 4;                                               // threshold value for middle optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
+const float RIGHT_OPTOSENSOR_THRESHOLD = 4;                                                // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
+const float CDS_CELL_RED_THRESHOLD = 0.48;                                                 // threshold value for cds cell to determine if the humidifier light is red or blue (red light will have a value below this threshold, blue light will have a value above this threshold)
+const float RCS_WAIT_TIME_IN_SEC = 0.35;                                                   // wait time between RCS position requests
+const float PULSE_TIME = 0.2;                                                              // duration of each pulse for RCS adjustments
+const int PULSE_POWER = 25;                                                                // power of each pulse for RCS adjustments
+const int MINUS = 0;                                                                       // constant for AruCo code orientation, means the robot needs to pulse counterclockwise to adjust
+const int PLUS = 1;                                                                        // constant for AruCo code orientation, means the robot needs to pulse clockwise to adjust
 
 // Function declarations
-//1. Movement functions
+// 1. Movement functions
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
-void goForward(int percent, float distance){
+void goForward(int percent, float distance)
+{
     // Calculate the number of encoder counts needed to travel the specified distance
     int targetCounts = distance / INCHES_PER_COUNT;
 
@@ -109,7 +110,7 @@ void turnRight(int percent, float angle) // left motor goes forward, right motor
 void pivotLeft(int percent, float angle) // right motor goes forward, left motor stops
 {
     // Calculate the number of encoder counts needed to turn the specified angle
-    int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH*2 / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
+    int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH * 2 / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
 
     // Reset encoders
     leftEncoder.ResetCounts();
@@ -131,7 +132,7 @@ void pivotLeft(int percent, float angle) // right motor goes forward, left motor
 void pivotRight(int percent, float angle)
 {
     // Calculate the number of encoder counts needed to turn the specified angle
-    int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH*2 / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
+    int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH * 2 / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
 
     // Reset encoders
     leftEncoder.ResetCounts();
@@ -143,10 +144,9 @@ void pivotRight(int percent, float angle)
     rightMotor.SetPercent(0);
 }
 
-
-//2. Line following functions
-// Runtime thresholds, can be updated by calibration so local-only center line testing
-// and final field (black-white-black) can share one algorithm.
+// 2. Line following functions
+//  Runtime thresholds, can be updated by calibration so local-only center line testing
+//  and final field (black-white-black) can share one algorithm.
 float leftLineThreshold = LEFT_OPTOSENSOR_THRESHOLD;
 float middleLineThreshold = MIDDLE_OPTOSENSOR_THRESHOLD;
 float rightLineThreshold = RIGHT_OPTOSENSOR_THRESHOLD;
@@ -158,13 +158,6 @@ int readLineState()
 
     return ((leftValue > leftLineThreshold ? 1 : 0) << 2) | ((middleValue > middleLineThreshold ? 1 : 0) << 1) | ((rightValue > rightLineThreshold ? 1 : 0) << 0);
 }
-
-
-{
-    leftMotor.SetPercent(-percent);
-    rightMotor.SetPercent(0);
-}
-
 /*
 State 0: 000, all sensors not on line, drive a little bit to see if that's a course issue, then stop
 state 1: 001, right sensor only on line, veering left, need to correct right, left motor faster
@@ -343,6 +336,110 @@ void followLinePID(float base_percent)
     }
 }
 
+// 3. RCS related functions
+void pulseCounterclockwise(int percent, float duration) // left motor goes backward, right motor goes forward
+{
+    leftMotor.SetPercent(percent);
+    rightMotor.SetPercent(percent);
+    Sleep(duration);
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+
+void pulseClockwise(int percent, float duration) // left motor goes forward, right motor goes backward
+{
+    leftMotor.SetPercent(-percent);
+    rightMotor.SetPercent(-percent);
+    Sleep(duration);
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+
+void pulseForward(int percent, float duration) // both motors go forward
+{
+    leftMotor.SetPercent(-percent);
+    rightMotor.SetPercent(percent);
+    Sleep(duration);
+    leftMotor.Stop();
+    rightMotor.Stop();
+}
+
+void check_position(float target_coord, bool is_x_axis, float target_heading, int orientation)
+{
+    RCSPose *pose;
+    int base_power = (orientation == MINUS) ? -POWER : POWER;
+    int max_attempts = 3;
+
+    for (int attempt = 0; attempt < max_attempts; attempt++)
+    {
+        pose = RCS.RequestPosition();
+        while (pose == nullptr || pose->heading < 0)
+        {
+            Sleep(0.1);
+            pose = RCS.RequestPosition();
+        }
+
+        float current_coord = is_x_axis ? pose->x : pose->y;
+        float coord_error = current_coord - target_coord;
+
+        float heading_error = target_heading - pose->heading;
+        if (heading_error > 180.0)
+            heading_error -= 360.0;
+        else if (heading_error < -180.0)
+            heading_error += 360.0;
+
+        if (abs(coord_error) <= 1.0 && abs(heading_error) <= 1.0)
+        {
+            break;
+        }
+
+        if (current_coord > target_coord + 1.0)
+        {
+            int move_counts = (int)(abs(coord_error) * COUNTS_PER_INCH);
+            move_forward(-base_power, move_counts);
+            Sleep(RCS_WAIT_TIME_IN_SEC);
+        }
+        else if (current_coord < target_coord - 1.0)
+        {
+            int move_counts = (int)(abs(coord_error) * COUNTS_PER_INCH);
+            move_forward(base_power, move_counts);
+            Sleep(RCS_WAIT_TIME_IN_SEC);
+        }
+
+        pose = RCS.RequestPosition();
+        while (pose == nullptr || pose->heading < 0)
+        {
+            Sleep(0.1);
+            pose = RCS.RequestPosition();
+        }
+
+        heading_error = target_heading - pose->heading;
+        if (heading_error > 180.0)
+            heading_error -= 360.0;
+        else if (heading_error < -180.0)
+            heading_error += 360.0;
+
+        if (abs(heading_error) > 1.0)
+        {
+            int turn_counts = (int)(abs(heading_error) * COUNTS_PER_DEGREE);
+            if (heading_error > 0)
+            {
+                turn_counterclockwise(POWER, turn_counts);
+            }
+            else
+            {
+                turn_counterclockwise(-POWER, turn_counts);
+            }
+            Sleep(RCS_WAIT_TIME_IN_SEC);
+        }
+    }
+}
+
+// 5. Task movement functions
+
+// 6. Task specific functions
+
+// 7. Others
 void hitButton(int percent, int angle)
 {
     if (cdsCell.Value() < CDS_CELL_RED_THRESHOLD)
@@ -400,9 +497,9 @@ void ERCMain()
 { // initialize
     sideArmServo.SetMin(588);
     sideArmServo.SetMax(2120);
-    // RCS.InitializeTouchMenu("CODE");
+    RCS.InitializeTouchMenu("0800A5DYF");
     // TestGUI();
     while (cdsCell.Value() > 1)
     {
-    } // wait for the light to turn on
+    }
 }
