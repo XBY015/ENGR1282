@@ -1,6 +1,7 @@
 #include <FEH.h>
 #include <FEHServo.h>
 #include <Arduino.h>
+#include <math.h>  
 // githubtest
 
 // Motor and encoder declarations
@@ -21,6 +22,7 @@ AnalogInputPin cdsCell(FEHIO::Pin6);
 // Variables
 int intersectionCount = 0;    // keep track of how many intersections we've gone through
 bool humidifierIsRed = false; // keep track of whether the humidifier light is red or blue, initialized to false (blue) but will be updated when we see the light at the humidifier
+int RCSRequestCount = 0; // keep track of how many times we've requested RCS position, to avoid infinite loop if RCS is not working properly
 
 // Constants
 const float WHEEL_DIAMETER = 3.0;                                                          // in inches
@@ -391,10 +393,9 @@ void getRCSLocation()
     LCD.WriteLine(pose->heading);
 }
 
-void check_position(float target_coord, bool is_x_axis, float target_heading, int orientation)
+void check_position(float target_x, float target_y, float target_heading)
 {
     RCSPose *pose;
-    int base_power = (orientation == MINUS) ? -PULSE_POWER : PULSE_POWER;
     int max_attempts = 3;
 
     for (int attempt = 0; attempt < max_attempts; attempt++)
@@ -406,28 +407,36 @@ void check_position(float target_coord, bool is_x_axis, float target_heading, in
             pose = RCS.RequestPosition();
         }
 
-        float current_coord = is_x_axis ? pose->x : pose->y;
-        float coord_error = current_coord - target_coord;
+        float dx = target_x - pose->x;
+        float dy = target_y - pose->y;
+        float distance = sqrt(dx * dx + dy * dy);
 
         float heading_error = target_heading - pose->heading;
-        if (heading_error > 180.0)
-            heading_error -= 360.0;
-        else if (heading_error < -180.0)
-            heading_error += 360.0;
+        if (heading_error > 180.0) heading_error -= 360.0;
+        else if (heading_error < -180.0) heading_error += 360.0;
 
-        if (abs(coord_error) <= 1.0 && abs(heading_error) <= 1.0)
+        if (distance <= 1.0 && abs(heading_error) <= 1.0)
         {
             break;
         }
 
-        if (current_coord > target_coord + 1.0)
+        if (distance > 1.0)
         {
-            goForward(-base_power, abs(coord_error));
-            Sleep(RCS_WAIT_TIME_IN_SEC);
-        }
-        else if (current_coord < target_coord - 1.0)
-        {
-            goForward(base_power, abs(coord_error));
+            float absolute_angle_to_target = atan2(dy, dx) * 180.0 / 3.14159265;
+            if (absolute_angle_to_target < 0) absolute_angle_to_target += 360.0;
+
+            float turn_to_target = absolute_angle_to_target - pose->heading;
+            if (turn_to_target > 180.0) turn_to_target -= 360.0;
+            else if (turn_to_target < -180.0) turn_to_target += 360.0;
+
+            if (abs(turn_to_target) > 1.0)
+            {
+                if (turn_to_target > 0) turnLeft(PULSE_POWER, abs(turn_to_target));
+                else turnRight(PULSE_POWER, abs(turn_to_target));
+                Sleep(RCS_WAIT_TIME_IN_SEC);
+            }
+
+            goForward(PULSE_POWER, distance);
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
 
@@ -439,21 +448,13 @@ void check_position(float target_coord, bool is_x_axis, float target_heading, in
         }
 
         heading_error = target_heading - pose->heading;
-        if (heading_error > 180.0)
-            heading_error -= 360.0;
-        else if (heading_error < -180.0)
-            heading_error += 360.0;
+        if (heading_error > 180.0) heading_error -= 360.0;
+        else if (heading_error < -180.0) heading_error += 360.0;
 
         if (abs(heading_error) > 1.0)
         {
-            if (heading_error > 0)
-            {
-                turnLeft(PULSE_POWER, abs(heading_error));
-            }
-            else
-            {
-                turnLeft(-PULSE_POWER, abs(heading_error));
-            }
+            if (heading_error > 0) turnLeft(PULSE_POWER, abs(heading_error));
+            else turnRight(PULSE_POWER, abs(heading_error));
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
     }
@@ -563,7 +564,6 @@ void ERCMain()
     sideArmServo.SetMax(2120);
     RCS.InitializeTouchMenu("0800A5DYF");
     RCS.DisableRateLimit();
-    RCSPose *pose;
     int touch_x, touch_y;
     while(!LCD.Touch(&touch_x, &touch_y))
     {
