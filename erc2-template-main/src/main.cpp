@@ -11,6 +11,7 @@ DigitalEncoder rightEncoder(FEHIO::Pin8);
 FEHServo humidifierServo(FEHServo::Servo0);
 FEHServo sideArmServo(FEHServo::Servo1);
 FEHServo compostServo(FEHServo::Servo3);
+FEHServo bigArmServo(FEHMotor :: );
 
 // Sensor declarations
 AnalogInputPin optosensorLeft(FEHIO::Pin4);
@@ -18,7 +19,7 @@ AnalogInputPin optosensorMiddle(FEHIO::Pin2);
 AnalogInputPin optosensorRight(FEHIO::Pin0);
 AnalogInputPin cdsCell(FEHIO::Pin6);
 
-// Variables
+// Variablesrcs
 int intersectionCount = 0;    // keep track of how many intersections we've gone through
 bool humidifierIsRed = false; // keep track of whether the humidifier light is red or blue, initialized to false (blue) but will be updated when we see the light at the humidifier
 
@@ -37,8 +38,16 @@ const int PULSE_POWER = 25;                                                     
 const int MINUS = 0;                                                                       // constant for AruCo code orientation, means the robot needs to pulse counterclockwise to adjust
 const int PLUS = 1;                                                                        // constant for AruCo code orientation, means the robot needs to pulse clockwise to adjust
 
-// Function declarations
-// 1. Movement functions
+
+// servo methods
+
+void turnServoByAngle(float angle, FEHServo servo){
+    servo.SetMax
+}
+
+
+
+
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
 void goForward(int percent, float distance)
 {
@@ -570,16 +579,103 @@ void ERCMain()
         getRCSLocation();
     }
     Sleep(2);
+
     // PLACE TASK FUNCTION CALLS HERE
+}
+void compostTurn()
+{
+    compostServo.SetMin(998);
+    compostServo.SetMax(1852);
 
+    compostServo.SetDegree(0);
+    Sleep(2.0);
 
+    compostServo.SetDegree(270);
+    Sleep(2.0);
 
-
-    // TestGUI();
-    // while (cdsCell.Value() > 1)
-    // {
-    // }
+    compostServo.SetDegree(0);
+    Sleep(2.0);
 }
 
+// assume arm servo starts at correct height
+void pickUpFruit()
+{
+    goForward(40, 3); // 3 is place holder value
+    turnServoByAngle(360, bigArmServo);
+}
+// proceed to back away and go up ramp and stuff
+
+// assuming arm can reach table
+void depositFruitTable()
+{
+    // needs testing adjust values
+    turnServoByAngle(5 * 360, bigArmServo);
+    turnServoByAngle(-360, bigArmServo);
+}
+
+// assuming crate
+void depositFruitCrate()
+{
+    turnServoByAngle(-3 * 360, bigArmServo);
+    goForward(-30, 2);
+}
+
+void navigateToFertilizer()
+{
+    // rcs bs
+
+    int state = RCS.GetLever();
+
+    switch (state)
+    {
+        case 1:
+
+        case 2:
+        case 3:
+    }
+}
+
+void fertilizer()
+{
+    // raise arm
+    turnServoByAngle(3 * 360, bigArmServo);
+    goForward(-30,3);
+    turnServoByAngle(-5 * 360, bigArmServo);
+    goForward(-30, 2);
+    Sleep(7);
+    goForward(30, 2);
+
+    // raise arm
+    turnServoByAngle(5 * 360, bigArmServo);
+}
+
+// distance from light to buttons is 9 in
+//
+void humidifer()
+{
+    float cellValue = cdsCell.Value();
+
+    // update thresholds at some point idk what they are
+    //  red
+    if (cellValue > 1)
+    {
+        turnRight(30, 90);
+        goForward(30, 2.25);
+        turnLeft(30, 90);
+        goForward(30, 7.35);
+    }
+    else if (cellValue < 1 && cellValue > 0)
+    {
+        turnLeft(30, 90);
+        goForward(30, 2.25);
+        turnRight(30, 90);
+        goForward(30, 7.35);
+    }
+    else
+    {
+        LCD.WriteLine("CdScell not reading correctly");
+    }
+}
+// proceed to window
 
 
