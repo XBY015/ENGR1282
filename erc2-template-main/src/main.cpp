@@ -542,3 +542,45 @@ void ERCMain()
     // {
     // }
 }
+
+
+
+void openWindow()
+{
+// drive forward
+    goForward(30, 10.0); 
+
+// turn left degrees to face window
+    turnLeft(30, 90.0);
+
+// drive forward to push window
+    goForward(30, 8.0); 
+
+// go around the window
+    // Back up to clear the window frame 
+    goForward(-30, 4.0); 
+
+// Turn right 45 degrees to be at an angle with window
+    turnRight(30, 45.0);
+
+// drive forward to pass the open window
+    goForward(30, 2.0);
+
+// turn left to be at an angle head on with the window
+    turnLeft(30, 90.0);
+
+// drive forward to clear the back edge of the window
+    goForward(30, 2.0);
+
+// Turn left 45 degrees to be parallel with the window
+    turnRight(30, 45.0);
+
+// drive forward to clear the window
+    goForward(30, 2.0); 
+
+// drive backward to push the window back to its closed position
+    goForward(-30, 10.0); 
+    
+// back up slightly after closing to smoothly move to next task
+    goForward(-30, 3.0);
+}
