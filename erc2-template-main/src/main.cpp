@@ -462,8 +462,6 @@ void check_position(float target_coord, bool is_x_axis, float target_heading, in
 }
 
 // 5. Task movement functions
-
-
 void openWindow()
 {
 // drive forward
