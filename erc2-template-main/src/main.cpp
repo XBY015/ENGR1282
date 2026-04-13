@@ -374,8 +374,6 @@ void pulseForward(int percent, float duration) // both motors go forward
 void getRCSLocation()
 {
     RCSPose *pose = RCS.RequestPosition();
-    LCD.SetBackgroundColor(LCD.Black);
-    LCD.SetFontColor(LCD.White);
     while (pose == nullptr)
     {
         LCD.WriteLine("Waiting for RCS position...");
