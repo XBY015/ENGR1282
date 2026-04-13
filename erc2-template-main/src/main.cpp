@@ -142,6 +142,13 @@ void pivotRight(int percent, float angle)
 
     leftMotor.SetPercent(percent);
     rightMotor.SetPercent(0);
+    while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
+    {
+    }
+
+    // Stop motors
+    leftMotor.Stop();
+    rightMotor.Stop();
 }
 
 // 2. Line following functions
@@ -364,10 +371,32 @@ void pulseForward(int percent, float duration) // both motors go forward
     rightMotor.Stop();
 }
 
+void getRCSLocation()
+{
+    RCSPose *pose = RCS.RequestPosition();
+    LCD.SetBackgroundColor(LCD.Black);
+    LCD.SetFontColor(LCD.White);
+    while (pose == nullptr)
+    {
+        LCD.WriteLine("Waiting for RCS position...");
+        Sleep(0.1);
+        pose = RCS.RequestPosition();
+        LCD.Clear();
+    }
+    LCD.Clear();
+    LCD.WriteLine("RCS Position:");
+    LCD.WriteLine("X:");
+    LCD.WriteLine(pose->x);
+    LCD.WriteLine("Y:");
+    LCD.WriteLine(pose->y);
+    LCD.WriteLine("Heading:");
+    LCD.WriteLine(pose->heading);
+}
+
 void check_position(float target_coord, bool is_x_axis, float target_heading, int orientation)
 {
     RCSPose *pose;
-    int base_power = (orientation == MINUS) ? -POWER : POWER;
+    int base_power = (orientation == MINUS) ? -PULSE_POWER : PULSE_POWER;
     int max_attempts = 3;
 
     for (int attempt = 0; attempt < max_attempts; attempt++)
@@ -395,14 +424,12 @@ void check_position(float target_coord, bool is_x_axis, float target_heading, in
 
         if (current_coord > target_coord + 1.0)
         {
-            int move_counts = (int)(abs(coord_error) * COUNTS_PER_INCH);
-            move_forward(-base_power, move_counts);
+            goForward(-base_power, abs(coord_error));
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
         else if (current_coord < target_coord - 1.0)
         {
-            int move_counts = (int)(abs(coord_error) * COUNTS_PER_INCH);
-            move_forward(base_power, move_counts);
+            goForward(base_power, abs(coord_error));
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
 
@@ -421,14 +448,13 @@ void check_position(float target_coord, bool is_x_axis, float target_heading, in
 
         if (abs(heading_error) > 1.0)
         {
-            int turn_counts = (int)(abs(heading_error) * COUNTS_PER_DEGREE);
             if (heading_error > 0)
             {
-                turn_counterclockwise(POWER, turn_counts);
+                turnLeft(PULSE_POWER, abs(heading_error));
             }
             else
             {
-                turn_counterclockwise(-POWER, turn_counts);
+                turnLeft(-PULSE_POWER, abs(heading_error));
             }
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
@@ -498,8 +524,21 @@ void ERCMain()
     sideArmServo.SetMin(588);
     sideArmServo.SetMax(2120);
     RCS.InitializeTouchMenu("0800A5DYF");
-    // TestGUI();
-    while (cdsCell.Value() > 1)
+    RCS.DisableRateLimit();
+    RCSPose *pose;
+    int touch_x, touch_y;
+    while(!LCD.Touch(&touch_x, &touch_y))
     {
+        getRCSLocation();
     }
+    Sleep(2);
+    // PLACE TASK FUNCTION CALLS HERE
+
+
+
+
+    // TestGUI();
+    // while (cdsCell.Value() > 1)
+    // {
+    // }
 }
