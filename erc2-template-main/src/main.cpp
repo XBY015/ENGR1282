@@ -12,7 +12,7 @@ DigitalEncoder rightEncoder(FEHIO::Pin8);
 FEHServo humidifierServo(FEHServo::Servo0);
 FEHServo sideArmServo(FEHServo::Servo1);
 FEHServo compostServo(FEHServo::Servo3);
-FEHServo bigArmServo(FEHMotor::Servo);
+FEHServo bigArmServo(FEHServo::Servo5);
 
 // Sensor declarations
 AnalogInputPin optosensorLeft(FEHIO::Pin4);
@@ -39,6 +39,8 @@ const float PULSE_TIME = 0.2;                                                   
 const int PULSE_POWER = 25;                                                                // power of each pulse for RCS adjustments
 const int MINUS = 0;                                                                       // constant for AruCo code orientation, means the robot needs to pulse counterclockwise to adjust
 const int PLUS = 1;                                                                        // constant for AruCo code orientation, means the robot needs to pulse clockwise to adjust
+const float SECONDS_PER_DEGREE_NEG = 0.0023;                                               // 0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
+const float SECONDS_PER_DEGREE_POS = 0.00175;                                              // 0.00235; //at 50% speed                                         // distance between the centers of the two wheels in inches
 
 float distToPoint(float currentX, float currentY, float targetX, float targetY);
 float angleToPoint(float currentX, float currentY, float targetX, float targetY);
@@ -47,7 +49,32 @@ float angleToPoint(float currentX, float currentY, float targetX, float targetY)
 
 void turnServoByAngle(float angle, FEHServo servo)
 {
-    servo.SetMax
+    servo.SetMin(500);
+    servo.SetMax(2500);
+
+    if (angle == 0)
+        return;
+    int operatingSpeed = 90;
+    float timeToWait = 1.0;
+    if (angle < 0)
+    {
+        operatingSpeed = -50;
+        timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
+    }
+    else
+    {
+        operatingSpeed = 50;
+        timeToWait = angle * SECONDS_PER_DEGREE_POS;
+    }
+    setServoSpeed(operatingSpeed, servo);
+    Sleep(timeToWait);
+}
+
+void setServoSpeed(int percent, FEHServo servo)
+{
+    // int degree = 90+(percent*SERVO_BANDWIDTH/100);
+    int degree = 90 + (percent * 90 / 100);
+    servo.SetDegree(degree);
 }
 
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
@@ -410,8 +437,8 @@ void check_position(float target_x, float target_y, float target_heading)
     LCD.WriteLine(target_y);
     LCD.WriteLine(target_heading);
     RCSPose *pose;
-    
-    int max_attempts = 15; 
+
+    int max_attempts = 15;
 
     for (int attempt = 0; attempt < max_attempts; attempt++)
     {
@@ -425,15 +452,18 @@ void check_position(float target_x, float target_y, float target_heading)
         }
 
         float corrected_heading = pose->heading + 180.0;
-        if (corrected_heading >= 360.0) corrected_heading -= 360.0;
+        if (corrected_heading >= 360.0)
+            corrected_heading -= 360.0;
 
         float dx = target_x - pose->x;
         float dy = target_y - pose->y;
         float distance = sqrt(dx * dx + dy * dy);
 
-        float heading_error = target_heading - corrected_heading; 
-        if (heading_error > 180.0) heading_error -= 360.0;
-        else if (heading_error < -180.0) heading_error += 360.0;
+        float heading_error = target_heading - corrected_heading;
+        if (heading_error > 180.0)
+            heading_error -= 360.0;
+        else if (heading_error < -180.0)
+            heading_error += 360.0;
 
         // 容差判断
         if (distance <= 1 && abs(heading_error) <= 2.0)
@@ -445,41 +475,48 @@ void check_position(float target_x, float target_y, float target_heading)
         if (distance > 1)
         {
             float absolute_angle_to_target = atan2(dy, dx) * 180.0 / 3.14159265;
-            if (absolute_angle_to_target < 0) absolute_angle_to_target += 360.0;
+            if (absolute_angle_to_target < 0)
+                absolute_angle_to_target += 360.0;
 
             float turn_to_target = absolute_angle_to_target - corrected_heading;
-            if (turn_to_target > 180.0) turn_to_target -= 360.0;
-            else if (turn_to_target < -180.0) turn_to_target += 360.0;
+            if (turn_to_target > 180.0)
+                turn_to_target -= 360.0;
+            else if (turn_to_target < -180.0)
+                turn_to_target += 360.0;
 
             int current_power = PULSE_POWER;
 
-            if (turn_to_target > 90.0) 
+            if (turn_to_target > 90.0)
             {
-                turn_to_target -= 180.0;  
-                current_power = -PULSE_POWER; 
-            } 
-            else if (turn_to_target < -90.0) 
+                turn_to_target -= 180.0;
+                current_power = -PULSE_POWER;
+            }
+            else if (turn_to_target < -90.0)
             {
-                turn_to_target += 180.0;  
-                current_power = -PULSE_POWER; 
+                turn_to_target += 180.0;
+                current_power = -PULSE_POWER;
             }
 
             if (abs(turn_to_target) > 2.0)
             {
-                if (turn_to_target > 0) turnLeft(PULSE_POWER, abs(turn_to_target));
-                else turnRight(PULSE_POWER, abs(turn_to_target));
+                if (turn_to_target > 0)
+                    turnLeft(PULSE_POWER, abs(turn_to_target));
+                else
+                    turnRight(PULSE_POWER, abs(turn_to_target));
                 Sleep(RCS_WAIT_TIME_IN_SEC);
             }
 
-            pulseForward(current_power, PULSE_TIME); 
+            pulseForward(current_power, PULSE_TIME);
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
-        else 
+        else
         {
             if (abs(heading_error) > 2.0)
             {
-                if (heading_error > 0) turnLeft(PULSE_POWER, abs(heading_error));
-                else turnRight(PULSE_POWER, abs(heading_error));
+                if (heading_error > 0)
+                    turnLeft(PULSE_POWER, abs(heading_error));
+                else
+                    turnRight(PULSE_POWER, abs(heading_error));
                 Sleep(RCS_WAIT_TIME_IN_SEC);
             }
         }
@@ -614,7 +651,7 @@ void pickUpFruit()
     // move to compost? where is compost function ending?
 
     // measure values - facing away from bucket
-    check_position();
+    check_position(12, 20, 170);
 
     goForward(40, 3); // 3 is place holder value
     turnServoByAngle(360, bigArmServo);
@@ -635,7 +672,8 @@ void depositFruitTable()
     turnRight(30, 90);
     goForward(30, 5);
     turnLeft(30, 90);
-    check_position();
+
+    check_position(25, 63, 0);
 
     // needs testing adjust values
     turnServoByAngle(5 * 360, bigArmServo);
@@ -658,7 +696,8 @@ void depositFruitCrate()
     // turn around
     turnRight(30, 180);
     goForward(-30, 4);
-    check_position();
+
+    check_position(26, 64, 180);
 
     // drop into crate
     turnServoByAngle(-3 * 360, bigArmServo);
@@ -676,17 +715,17 @@ void navigateToFertilizer()
 
     switch (state)
     {
+    case 0:
+        navigateToPoint(11, 57, 315);
+        check_position(11, 57, 315);
+        break;
     case 1:
-        navigateToPoint(, , 315);
-        check_position();
+        navigateToPoint(14, 60, 315);
+        check_position(14, 60, 315);
         break;
     case 2:
-        navigateToPoint(, , 315);
-        check_position();
-        break;
-    case 3:
-        navigateToPoint(, , 315);
-        check_position();
+        navigateToPoint(18, 64, 315);
+        check_position(18, 64, 315);
         break;
     }
 
@@ -697,9 +736,9 @@ void fertilizer()
 {
     // raise arm
     turnServoByAngle(3 * 360, bigArmServo);
-    goForward(-30, 3);
-    turnServoByAngle(-5 * 360, bigArmServo);
     goForward(-30, 2);
+    turnServoByAngle(-5 * 360, bigArmServo);
+    goForward(30, 2);
     Sleep(5.5);
     goForward(30, 2);
 
@@ -709,8 +748,9 @@ void fertilizer()
 
 void goToHumidifer()
 {
-    // x and y of light?
-    navigateToPoint(, , 315);
+    
+    navigateToPoint(15,50 , 180);
+    check_position(15,50,180);
 }
 
 // distance from light to buttons is 9 in
@@ -718,29 +758,25 @@ void goToHumidifer()
 void humidifer()
 {
 
-    check_position();
     float cellValue = cdsCell.Value();
     // when the robot is on the light
     // update thresholds at some point idk what they are
     //  red
-    if (cellValue > 1)
+    if (cellValue <CDS_CELL_RED_THRESHOLD)
     {
         turnRight(30, 90);
         goForward(30, 2.25);
         turnLeft(30, 90);
         goForward(30, 7.35);
     }
-    else if (cellValue < 1 && cellValue > 0)
+    else 
     {
         turnLeft(30, 90);
         goForward(30, 2.25);
         turnRight(30, 90);
         goForward(30, 7.35);
     }
-    else
-    {
-        LCD.WriteLine("CdScell not reading correctly");
-    }
+
 }
 
 void navigateToCompost()
