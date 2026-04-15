@@ -2,6 +2,7 @@
 #include <FEHServo.h>
 #include <Arduino.h>
 #include <math.h>
+#include <math.h>  
 // githubtest
 
 // Motor and encoder declarations
@@ -12,6 +13,7 @@ DigitalEncoder rightEncoder(FEHIO::Pin8);
 FEHServo humidifierServo(FEHServo::Servo0);
 FEHServo sideArmServo(FEHServo::Servo1);
 FEHServo compostServo(FEHServo::Servo3);
+FEHServo bigArmServo(FEHMotor::Servo);
 
 // Sensor declarations
 AnalogInputPin optosensorLeft(FEHIO::Pin4);
@@ -19,7 +21,7 @@ AnalogInputPin optosensorMiddle(FEHIO::Pin2);
 AnalogInputPin optosensorRight(FEHIO::Pin0);
 AnalogInputPin cdsCell(FEHIO::Pin6);
 
-// Variables
+// Variablesrcs
 int intersectionCount = 0;    // keep track of how many intersections we've gone through
 bool humidifierIsRed = false; // keep track of whether the humidifier light is red or blue, initialized to false (blue) but will be updated when we see the light at the humidifier
 int RCSRequestCount = 0;      // keep track of how many times we've requested RCS position, to avoid infinite loop if RCS is not working properly
@@ -33,14 +35,22 @@ const float LEFT_OPTOSENSOR_THRESHOLD = 4;                                      
 const float MIDDLE_OPTOSENSOR_THRESHOLD = 4;                                               // threshold value for middle optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float RIGHT_OPTOSENSOR_THRESHOLD = 4;                                                // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float CDS_CELL_RED_THRESHOLD = 0.48;                                                 // threshold value for cds cell to determine if the humidifier light is red or blue (red light will have a value below this threshold, blue light will have a value above this threshold)
-const float RCS_WAIT_TIME_IN_SEC = 0.35;                                                   // wait time between RCS position requests
+const float RCS_WAIT_TIME_IN_SEC = 0.1;                                                   // wait time between RCS position requests
 const float PULSE_TIME = 0.2;                                                              // duration of each pulse for RCS adjustments
 const int PULSE_POWER = 25;                                                                // power of each pulse for RCS adjustments
 const int MINUS = 0;                                                                       // constant for AruCo code orientation, means the robot needs to pulse counterclockwise to adjust
 const int PLUS = 1;                                                                        // constant for AruCo code orientation, means the robot needs to pulse clockwise to adjust
 
-// Function declarations
-// 1. Movement functions
+float distToPoint(float currentX, float currentY, float targetX, float targetY);
+float angleToPoint(float currentX, float currentY, float targetX, float targetY);
+
+// servo methods
+
+void turnServoByAngle(float angle, FEHServo servo)
+{
+    servo.SetMax
+}
+
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
 void goForward(int percent, float distance)
 {
@@ -394,96 +404,85 @@ void getRCSLocation()
 }
 
 void check_position(float target_x, float target_y, float target_heading)
+<<<<<<< HEAD
+void check_position(float target_coord, bool is_x_axis, float target_heading, int orientation)
+// crate position : {(x,y,heading);(26.69,87.25,87.25)}
+=======
+void check_position(float target_x, float target_y, float target_heading)
+>>>>>>> f90c0ccf5feca345b69a24401d6efd36ca7c1a10
 {
-    LCD.Clear();
-    LCD.WriteLine("Target Pos: X, Y, Head");
-    LCD.WriteLine(target_x);
-    LCD.WriteLine(target_y);
-    LCD.WriteLine(target_heading);
     RCSPose *pose;
-    
-    int max_attempts = 15; 
+    int max_attempts = 3;
 
     for (int attempt = 0; attempt < max_attempts; attempt++)
     {
         pose = RCS.RequestPosition();
-        RCSRequestCount++;
         while (pose == nullptr || pose->heading < 0)
         {
             Sleep(0.1);
             pose = RCS.RequestPosition();
-            RCSRequestCount++;
         }
-
-        float corrected_heading = pose->heading + 180.0;
-        if (corrected_heading >= 360.0) corrected_heading -= 360.0;
 
         float dx = target_x - pose->x;
         float dy = target_y - pose->y;
         float distance = sqrt(dx * dx + dy * dy);
 
-        float heading_error = target_heading - corrected_heading; 
+        float heading_error = target_heading - pose->heading;
         if (heading_error > 180.0) heading_error -= 360.0;
         else if (heading_error < -180.0) heading_error += 360.0;
 
-        // 容差判断
-        if (distance <= 1 && abs(heading_error) <= 2.0)
+        if (distance <= 1.0 && abs(heading_error) <= 1.0)
         {
-            LCD.WriteLine("Position Reached!");
             break;
         }
 
-        if (distance > 1)
+        if (distance > 1.0)
         {
             float absolute_angle_to_target = atan2(dy, dx) * 180.0 / 3.14159265;
-            if (absolute_angle_to_target < 0) absolute_angle_to_target += 360.0;
+            if (absolute_angle_to_target < 0)
+                absolute_angle_to_target += 360.0;
 
-            float turn_to_target = absolute_angle_to_target - corrected_heading;
-            if (turn_to_target > 180.0) turn_to_target -= 360.0;
-            else if (turn_to_target < -180.0) turn_to_target += 360.0;
+            float turn_to_target = absolute_angle_to_target - pose->heading;
+            if (turn_to_target > 180.0)
+                turn_to_target -= 360.0;
+            else if (turn_to_target < -180.0)
+                turn_to_target += 360.0;
 
-            int current_power = PULSE_POWER;
-
-            if (turn_to_target > 90.0) 
+            if (abs(turn_to_target) > 1.0)
             {
-                turn_to_target -= 180.0;  
-                current_power = -PULSE_POWER; 
-            } 
-            else if (turn_to_target < -90.0) 
-            {
-                turn_to_target += 180.0;  
-                current_power = -PULSE_POWER; 
-            }
-
-            if (abs(turn_to_target) > 2.0)
-            {
-                if (turn_to_target > 0) turnLeft(PULSE_POWER, abs(turn_to_target));
-                else turnRight(PULSE_POWER, abs(turn_to_target));
+                if (turn_to_target > 0)
+                    turnLeft(PULSE_POWER, abs(turn_to_target));
+                else
+                    turnRight(PULSE_POWER, abs(turn_to_target));
                 Sleep(RCS_WAIT_TIME_IN_SEC);
             }
 
-            pulseForward(current_power, PULSE_TIME); 
+            goForward(PULSE_POWER, distance);
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
-        else 
+
+        pose = RCS.RequestPosition();
+        while (pose == nullptr || pose->heading < 0)
         {
-            if (abs(heading_error) > 2.0)
-            {
-                if (heading_error > 0) turnLeft(PULSE_POWER, abs(heading_error));
-                else turnRight(PULSE_POWER, abs(heading_error));
-                Sleep(RCS_WAIT_TIME_IN_SEC);
-            }
+            Sleep(0.1);
+            pose = RCS.RequestPosition();
         }
-        LCD.WriteLine("current position: X, Y, Head");
-        LCD.WriteLine(pose->x);
-        LCD.WriteLine(pose->y);
-        LCD.WriteLine(pose->heading);
-        Sleep(0.5);
-        LCD.Clear();
+
+        heading_error = target_heading - pose->heading;
+        if (heading_error > 180.0)
+            heading_error -= 360.0;
+        else if (heading_error < -180.0)
+            heading_error += 360.0;
+
+        if (abs(heading_error) > 1.0)
+        {
+            if (heading_error > 0)
+                turnLeft(PULSE_POWER, abs(heading_error));
+            else
+                turnRight(PULSE_POWER, abs(heading_error));
+            Sleep(RCS_WAIT_TIME_IN_SEC);
+        }
     }
-    LCD.Clear();
-    LCD.WriteLine("Current Request count:");
-    LCD.WriteLine(RCSRequestCount);
 }
 
 // 5. Task movement functions
@@ -491,12 +490,18 @@ void openWindow()
 {
     // drive forward
     goForward(30, 10.0);
+// drive forward
+    goForward(30, 20.0); 
 
     // turn left degrees to face window
     turnRight(30, 90.0);
+// turn right degrees to face window
+    turnRight(30, 120.0);
 
     // drive forward to push window
     goForward(30, 8.0);
+// drive forward to push window
+    goForward(30, 10.0); 
 
     // go around the window
     // Back up to clear the window frame
@@ -504,18 +509,24 @@ void openWindow()
 
     // Turn right 45 degrees to be at an angle with window
     turnRight(30, 45.0);
+// Turn right 45 degrees to be at an angle with window
+    turnRight(30, 75.0);
 
     // drive forward to pass the open window
     goForward(30, 2.0);
 
     // turn left to be at an angle head on with the window
     turnLeft(30, 90.0);
+// turn left to be at an angle head on with the window
+    turnLeft(30, 120.0);
 
     // drive forward to clear the back edge of the window
     goForward(30, 2.0);
 
     // Turn left 45 degrees to be parallel with the window
     turnRight(30, 45.0);
+// Turn left 45 degrees to be parallel with the window
+    turnRight(30, 75.0);
 
     // drive forward to clear the window
     goForward(30, 2.0);
@@ -525,6 +536,141 @@ void openWindow()
 
     // back up slightly after closing to smoothly move to next task
     goForward(-30, 3.0);
+}
+
+
+void compostSpeed(int percent)
+
+{
+
+   // int degree = 90+(percent*SERVO_BANDWIDTH/100);
+
+   int degree = 90 + (percent * 90 / 100);
+
+   compostServo.SetDegree(degree);
+
+}
+
+void compostTurn(int angle){
+
+   compostServo.SetMin(500); 
+
+   compostServo.SetMax(2500); 
+
+  
+
+   if (angle == 0)
+
+       return;
+
+   int operatingSpeed = 90;
+
+   float timeToWait = 1.0;
+
+   if (angle < 0)
+
+   {
+
+       operatingSpeed = -50;
+
+       timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
+
+   }
+
+   else
+
+   {
+
+       operatingSpeed = 50;
+
+       timeToWait = angle * SECONDS_PER_DEGREE_POS;
+
+   }
+
+   compostSpeed(operatingSpeed);
+
+   Sleep(timeToWait);
+
+   
+
+ 
+
+   compostServo.Off();
+
+}
+
+ 
+
+void doCompost(){
+
+   
+
+   LCD.WriteLine("getting off button");
+
+   turnLeft(25, 90);
+
+   LCD.WriteLine("turning towards compost");
+
+   goForward(50, 2);
+
+   LCD.WriteLine("drive towards the bin");
+
+   turnRight(25, 45);
+
+   LCD.WriteLine("turning towards compost");
+
+   goForward(50, 1);
+
+   LCD.WriteLine("get attached to bin");
+
+   turnLeft(25, 10);
+
+   LCD.WriteLine("turning towards compost");
+
+   goForward(50, 1);
+
+   LCD.WriteLine("get attached to bin");
+
+   turnRight(25, 5);
+
+   LCD.WriteLine("turning towards compost");
+
+   goForward(50, 4);
+
+   LCD.WriteLine("get attached to bin");
+
+   compostTurn(-480);
+
+   LCD.WriteLine("turn compost ccw");
+
+   Sleep(2.0);
+
+   LCD.WriteLine("return compost to intial");
+
+   compostTurn(550);
+
+   LCD.WriteLine("turning towards compost");
+
+   goForward(-50, 5);
+
+   LCD.WriteLine("reverse");
+
+   turnLeft(25, 15);
+
+   LCD.WriteLine("turn towards button");
+
+   goForward(-50, 1);
+
+   LCD.WriteLine("get to button");
+
+   turnRight(25,10);
+
+   LCD.WriteLine("turn towards button");
+
+   goForward(-60, 8);
+
+   LCD.WriteLine("get to button");
+
 }
 
 // 6. Task specific functions
@@ -589,18 +735,23 @@ void ERCMain()
     sideArmServo.SetMax(2120);
     RCS.InitializeTouchMenu("0800A5DYF");
     RCS.DisableRateLimit();
-    // int touch_x, touch_y;
-    // while(!LCD.Touch(&touch_x, &touch_y))
-    // {
-    //     getRCSLocation();
-    // }
-    // Sleep(2);
+    int touch_x, touch_y;
+    while (!LCD.Touch(&touch_x, &touch_y))
+    {
+        getRCSLocation();
+    }
+    Sleep(2);
+
     // PLACE TASK FUNCTION CALLS HERE
 
-    check_position(30, 5, 130);
+
+
 
     // TestGUI();
     // while (cdsCell.Value() > 1)
     // {
     // }
 }
+
+
+
