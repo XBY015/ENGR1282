@@ -404,80 +404,95 @@ void getRCSLocation()
 
 void check_position(float target_x, float target_y, float target_heading)
 {
+    LCD.Clear();
+    LCD.WriteLine("Target Pos: X, Y, Head");
+    LCD.WriteLine(target_x);
+    LCD.WriteLine(target_y);
+    LCD.WriteLine(target_heading);
     RCSPose *pose;
-    int max_attempts = 3;
+    
+    int max_attempts = 15; 
 
     for (int attempt = 0; attempt < max_attempts; attempt++)
     {
         pose = RCS.RequestPosition();
+        RCSRequestCount++;
         while (pose == nullptr || pose->heading < 0)
         {
             Sleep(0.1);
             pose = RCS.RequestPosition();
+            RCSRequestCount++;
         }
+
+        float corrected_heading = pose->heading + 180.0;
+        if (corrected_heading >= 360.0) corrected_heading -= 360.0;
 
         float dx = target_x - pose->x;
         float dy = target_y - pose->y;
         float distance = sqrt(dx * dx + dy * dy);
 
-        float heading_error = target_heading - pose->heading;
-        if (heading_error > 180.0)
-            heading_error -= 360.0;
-        else if (heading_error < -180.0)
-            heading_error += 360.0;
+        float heading_error = target_heading - corrected_heading; 
+        if (heading_error > 180.0) heading_error -= 360.0;
+        else if (heading_error < -180.0) heading_error += 360.0;
 
-        if (distance <= 1.0 && abs(heading_error) <= 1.0)
+        // 容差判断
+        if (distance <= 1 && abs(heading_error) <= 2.0)
         {
+            LCD.WriteLine("Position Reached!");
             break;
         }
 
-        if (distance > 1.0)
+        if (distance > 1)
         {
             float absolute_angle_to_target = atan2(dy, dx) * 180.0 / 3.14159265;
-            if (absolute_angle_to_target < 0)
-                absolute_angle_to_target += 360.0;
+            if (absolute_angle_to_target < 0) absolute_angle_to_target += 360.0;
 
-            float turn_to_target = absolute_angle_to_target - pose->heading;
-            if (turn_to_target > 180.0)
-                turn_to_target -= 360.0;
-            else if (turn_to_target < -180.0)
-                turn_to_target += 360.0;
+            float turn_to_target = absolute_angle_to_target - corrected_heading;
+            if (turn_to_target > 180.0) turn_to_target -= 360.0;
+            else if (turn_to_target < -180.0) turn_to_target += 360.0;
 
-            if (abs(turn_to_target) > 1.0)
+            int current_power = PULSE_POWER;
+
+            if (turn_to_target > 90.0) 
             {
-                if (turn_to_target > 0)
-                    turnLeft(PULSE_POWER, abs(turn_to_target));
-                else
-                    turnRight(PULSE_POWER, abs(turn_to_target));
+                turn_to_target -= 180.0;  
+                current_power = -PULSE_POWER; 
+            } 
+            else if (turn_to_target < -90.0) 
+            {
+                turn_to_target += 180.0;  
+                current_power = -PULSE_POWER; 
+            }
+
+            if (abs(turn_to_target) > 2.0)
+            {
+                if (turn_to_target > 0) turnLeft(PULSE_POWER, abs(turn_to_target));
+                else turnRight(PULSE_POWER, abs(turn_to_target));
                 Sleep(RCS_WAIT_TIME_IN_SEC);
             }
 
-            goForward(PULSE_POWER, distance);
+            pulseForward(current_power, PULSE_TIME); 
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
-
-        pose = RCS.RequestPosition();
-        while (pose == nullptr || pose->heading < 0)
+        else 
         {
-            Sleep(0.1);
-            pose = RCS.RequestPosition();
+            if (abs(heading_error) > 2.0)
+            {
+                if (heading_error > 0) turnLeft(PULSE_POWER, abs(heading_error));
+                else turnRight(PULSE_POWER, abs(heading_error));
+                Sleep(RCS_WAIT_TIME_IN_SEC);
+            }
         }
-
-        heading_error = target_heading - pose->heading;
-        if (heading_error > 180.0)
-            heading_error -= 360.0;
-        else if (heading_error < -180.0)
-            heading_error += 360.0;
-
-        if (abs(heading_error) > 1.0)
-        {
-            if (heading_error > 0)
-                turnLeft(PULSE_POWER, abs(heading_error));
-            else
-                turnRight(PULSE_POWER, abs(heading_error));
-            Sleep(RCS_WAIT_TIME_IN_SEC);
-        }
+        LCD.WriteLine("current position: X, Y, Head");
+        LCD.WriteLine(pose->x);
+        LCD.WriteLine(pose->y);
+        LCD.WriteLine(pose->heading);
+        Sleep(0.5);
+        LCD.Clear();
     }
+    LCD.Clear();
+    LCD.WriteLine("Current Request count:");
+    LCD.WriteLine(RCSRequestCount);
 }
 
 // 5. Task movement functions
