@@ -45,8 +45,8 @@ const float SECONDS_PER_DEGREE_POS = 0.00175;                                   
 float distToPoint(float currentX, float currentY, float targetX, float targetY);
 float angleToPoint(float currentX, float currentY, float targetX, float targetY);
 
-// servo methods
-
+// utility methods
+//servos
 void turnServoByAngle(float angle, FEHServo servo)
 {
     servo.SetMin(500);
@@ -76,7 +76,69 @@ void setServoSpeed(int percent, FEHServo servo)
     int degree = 90 + (percent * 90 / 100);
     servo.SetDegree(degree);
 }
+//distance stuff
+float distToPoint(float currentX, float currentY, float targetX, float targetY)
+{
+    float xDist = targetX - currentX;
+    float yDist = targetY - currentY;
+    return pow((pow(xDist, 2) + pow(yDist, 2)), 0.5);
+}
 
+float angleToPoint(float currentX, float currentY, float targetX, float targetY)
+{
+    float xDist = targetX - currentX;
+    float yDist = targetY - currentY;
+    float tempAngle = atan(xDist / yDist);
+
+    if (xDist > 0 && yDist > 0)
+    {
+        return tempAngle;
+    }
+    else if (xDist > 0 && yDist < 0)
+    {
+        return 360 - tempAngle;
+    }
+    else if (xDist < 0 && yDist > 0)
+    {
+        return 180 - tempAngle;
+    }
+    else
+        (xDist < 0 && yDist < 0);
+    {
+        return 270 - tempAngle;
+    }
+}
+
+void navigateToPoint(float targetX, float targetY, float targetAngle)
+{
+    RCSPose *pose = RCS.RequestPosition();
+
+    float dist = distToPoint(pose->x, pose->y, targetX, targetY);
+    float angle = angleToPoint(pose->x, pose->y, targetX, targetY);
+
+    if (pose->heading > angle)
+    {
+        turnRight(30, pose->heading - angle);
+    }
+    else
+    {
+        turnLeft(30, angle - pose->heading);
+    }
+
+    goForward(30, dist);
+
+    if (pose->heading > targetAngle)
+    {
+        turnRight(30, pose->heading - targetAngle);
+    }
+    else
+    {
+        turnLeft(30, targetAngle - pose->heading);
+    }
+}
+
+
+// 1. Basic movement functions
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
 void goForward(int percent, float distance)
 {
@@ -532,50 +594,83 @@ void check_position(float target_x, float target_y, float target_heading)
     LCD.WriteLine(RCSRequestCount);
 }
 
-// 5. Task movement functions
-void openWindow()
+//. Task Functions
+// try to keep in order of tasks
+
+// compost and related functions
+void doCompost()
 {
-    // drive forward
-    goForward(30, 10.0);
+    LCD.WriteLine("getting off button");
+    turnLeft(25, 90);
+    LCD.WriteLine("turning towards compost");
+    goForward(50, 2);
+    LCD.WriteLine("drive towards the bin");
+    turnRight(25, 45);
+    LCD.WriteLine("turning towards compost");
+    goForward(50, 1);
+    LCD.WriteLine("get attached to bin");
+    turnLeft(25, 10);
+    LCD.WriteLine("turning towards compost");
+    goForward(50, 1);
+    LCD.WriteLine("get attached to bin");
+    turnRight(25, 5);
+    LCD.WriteLine("turning towards compost");
+    goForward(50, 4);
+    LCD.WriteLine("get attached to bin");
+    compostTurn(-480);
+    LCD.WriteLine("turn compost ccw");
+    Sleep(2.0);
+    LCD.WriteLine("return compost to intial");
+    compostTurn(550);
+    LCD.WriteLine("turning towards compost");
+    goForward(-50, 5);
 
-    // turn left degrees to face window
-    turnRight(30, 90.0);
-
-    // drive forward to push window
-    goForward(30, 8.0);
-
-    // go around the window
-    // Back up to clear the window frame
-    goForward(-30, 4.0);
-
-    // Turn right 45 degrees to be at an angle with window
-    turnRight(30, 45.0);
-
-    // drive forward to pass the open window
-    goForward(30, 2.0);
-
-    // turn left to be at an angle head on with the window
-    turnLeft(30, 90.0);
-
-    // drive forward to clear the back edge of the window
-    goForward(30, 2.0);
-
-    // Turn left 45 degrees to be parallel with the window
-    turnRight(30, 45.0);
-
-    // drive forward to clear the window
-    goForward(30, 2.0);
-
-    // drive backward to push the window back to its closed position
-    goForward(-30, 10.0);
-
-    // back up slightly after closing to smoothly move to next task
-    goForward(-30, 3.0);
+    // LCD.WriteLine("reverse");
+    // turnLeft(25, 15);
+    // LCD.WriteLine("turn towards button");
+    // goForward(-50, 1);
+    // LCD.WriteLine("get to button");
+    // turnRight(25, 10);
+    // LCD.WriteLine("turn towards button");
+    // goForward(-60, 8);
+    // LCD.WriteLine("get to button");
 }
 
-// 6. Task specific functions
+void compostSpeed(int percent)
+{
+    // int degree = 90+(percent*SERVO_BANDWIDTH/100);
+    int degree = 90 + (percent * 90 / 100);
+    compostServo.SetDegree(degree);
+}
 
-// 7. Others
+void compostTurn(int angle)
+{
+    compostServo.SetMin(500);
+    compostServo.SetMax(2500);
+
+    if (angle == 0)
+        return;
+    int operatingSpeed = 90;
+    float timeToWait = 1.0;
+    if (angle < 0)
+    {
+        operatingSpeed = -50;
+        timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
+    }
+    else
+    {
+        operatingSpeed = 50;
+        timeToWait = angle * SECONDS_PER_DEGREE_POS;
+    }
+    compostSpeed(operatingSpeed);
+    Sleep(timeToWait);
+
+    compostServo.Off();
+}
+
+
+
+//is this still being used?
 void hitButton(int percent, int angle)
 {
     if (cdsCell.Value() < CDS_CELL_RED_THRESHOLD)
@@ -629,32 +724,21 @@ void hitButton(int percent, int angle)
     }
 }
 
-void ERCMain()
-{ // initialize
-    sideArmServo.SetMin(588);
-    sideArmServo.SetMax(2120);
-    RCS.InitializeTouchMenu("0800A5DYF");
-    RCS.DisableRateLimit();
-    int touch_x, touch_y;
-    while (!LCD.Touch(&touch_x, &touch_y))
-    {
-        getRCSLocation();
-    }
-    Sleep(2);
 
-    // PLACE TASK FUNCTION CALLS HERE
-}
-
+//fruit and related functions
 // assume arm servo starts at correct height
-void pickUpFruit()
+void doFruit()
 {
     // move to compost? where is compost function ending?
+    navigateToPoint(12, 20, 0);
 
     // measure values - facing away from bucket
-    check_position(12, 20, 170);
+    check_position(12, 20, 0);
 
-    goForward(40, 3); // 3 is place holder value
+    goForward(40, 2); // 3 is place holder value
     turnServoByAngle(360, bigArmServo);
+
+    depositFruitTable();
 }
 // proceed to back away and go up ramp and stuff
 
@@ -675,7 +759,7 @@ void depositFruitTable()
 
     check_position(25, 63, 0);
 
-    // needs testing adjust values
+    // needs testing adjust rotational values
     turnServoByAngle(5 * 360, bigArmServo);
     turnServoByAngle(-360, bigArmServo);
 }
@@ -700,6 +784,7 @@ void depositFruitCrate()
     check_position(26, 64, 180);
 
     // drop into crate
+    // needs testing adjust rotational values
     turnServoByAngle(-3 * 360, bigArmServo);
     goForward(-30, 2);
 
@@ -707,7 +792,9 @@ void depositFruitCrate()
     turnRight(30, 90);
 }
 
-void navigateToFertilizer()
+
+// fertilizer and related methods
+void doFertilizer()
 {
     // rcs bs
     goForward(30, 10);
@@ -729,12 +816,14 @@ void navigateToFertilizer()
         break;
     }
 
-    fertilizer();
+    fertilizerLever();
 }
 
-void fertilizer()
+void fertilizerLever()
 {
     // raise arm
+    // suicide servo down into lever thing 
+    //as usual, adjust rotational stuff
     turnServoByAngle(3 * 360, bigArmServo);
     goForward(-30, 2);
     turnServoByAngle(-5 * 360, bigArmServo);
@@ -742,19 +831,19 @@ void fertilizer()
     Sleep(5.5);
     goForward(30, 2);
 
-    // raise arm
+    // raise arm if still possible
     turnServoByAngle(5 * 360, bigArmServo);
 }
 
-void goToHumidifer()
+
+// humidifer and related methods
+void doHumidifer()
 {
-    
-    navigateToPoint(15,50 , 180);
-    check_position(15,50,180);
+    navigateToPoint(15, 50, 180);
+    check_position(15, 50, 180);
 }
 
 // distance from light to buttons is 9 in
-// when does this start?
 void humidifer()
 {
 
@@ -762,150 +851,99 @@ void humidifer()
     // when the robot is on the light
     // update thresholds at some point idk what they are
     //  red
-    if (cellValue <CDS_CELL_RED_THRESHOLD)
+    if (cellValue < CDS_CELL_RED_THRESHOLD)
     {
+
+        // turn right, go right a little, then turn back forward and drive into button
         turnRight(30, 90);
         goForward(30, 2.25);
         turnLeft(30, 90);
         goForward(30, 7.35);
     }
-    else 
+    else
     {
+        // same as above but left
         turnLeft(30, 90);
         goForward(30, 2.25);
         turnRight(30, 90);
         goForward(30, 7.35);
     }
 
+
+    //back away - navigate to window
+    goForward(-30,3);
 }
 
-void navigateToCompost()
+
+//window
+void dowWindow()
 {
-    LCD.WriteLine("getting off button");
-    turnLeft(25, 90);
-    LCD.WriteLine("turning towards compost");
-    goForward(50, 2);
-    LCD.WriteLine("drive towards the bin");
-    turnRight(25, 45);
-    LCD.WriteLine("turning towards compost");
-    goForward(50, 1);
-    LCD.WriteLine("get attached to bin");
-    turnLeft(25, 10);
-    LCD.WriteLine("turning towards compost");
-    goForward(50, 1);
-    LCD.WriteLine("get attached to bin");
-    turnRight(25, 5);
-    LCD.WriteLine("turning towards compost");
-    goForward(50, 4);
-    LCD.WriteLine("get attached to bin");
-    compostTurn(-480);
-    LCD.WriteLine("turn compost ccw");
-    Sleep(2.0);
-    LCD.WriteLine("return compost to intial");
-    compostTurn(550);
-    LCD.WriteLine("turning towards compost");
-    goForward(-50, 5);
-    LCD.WriteLine("reverse");
-    turnLeft(25, 15);
-    LCD.WriteLine("turn towards button");
-    goForward(-50, 1);
-    LCD.WriteLine("get to button");
-    turnRight(25, 10);
-    LCD.WriteLine("turn towards button");
-    goForward(-60, 8);
-    LCD.WriteLine("get to button");
+    // drive forward
+    goForward(30, 10.0);
+
+    // turn left degrees to face window
+    turnRight(30, 90.0);
+
+    // drive forward to push window
+    goForward(30, 8.0);
+
+    // go around the window
+    // Back up to clear the window frame
+    goForward(-30, 4.0);
+
+    // Turn right 45 degrees to be at an angle with window
+    turnRight(30, 45.0);
+
+    // drive forward to pass the open window
+    goForward(30, 2.0);
+
+    // turn left to be at an angle head on with the window
+    turnLeft(30, 90.0);
+
+    // drive forward to clear the back edge of the window
+    goForward(30, 2.0);
+
+    // Turn left 45 degrees to be parallel with the window
+    turnRight(30, 45.0);
+
+    // drive forward to clear the window
+    goForward(30, 2.0);
+
+    // drive backward to push the window back to its closed position
+    goForward(-30, 10.0);
+
+    // back up slightly after closing to smoothly move to next task
+    goForward(-30, 3.0);
 }
 
-void compostSpeed(int percent)
-{
-    // int degree = 90+(percent*SERVO_BANDWIDTH/100);
-    int degree = 90 + (percent * 90 / 100);
-    compostServo.SetDegree(degree);
+// return to light
+void returnHome(){
+    
 }
 
-void compostTurn(int angle)
-{
-    compostServo.SetMin(500);
-    compostServo.SetMax(2500);
-
-    if (angle == 0)
-        return;
-    int operatingSpeed = 90;
-    float timeToWait = 1.0;
-    if (angle < 0)
+//Main
+void ERCMain()
+{ // initialize
+    sideArmServo.SetMin(588);
+    sideArmServo.SetMax(2120);
+    RCS.InitializeTouchMenu("0800A5DYF");
+    RCS.DisableRateLimit();
+    int touch_x, touch_y;
+    while (!LCD.Touch(&touch_x, &touch_y))
     {
-        operatingSpeed = -50;
-        timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
+        getRCSLocation();
     }
-    else
+    Sleep(2);
+
+    while (cdsCell.Value() > 1)
     {
-        operatingSpeed = 50;
-        timeToWait = angle * SECONDS_PER_DEGREE_POS;
-    }
-    compostSpeed(operatingSpeed);
-    Sleep(timeToWait);
-
-    compostServo.Off();
-}
-
-// some other navigatino stuff
-
-float distToPoint(float currentX, float currentY, float targetX, float targetY)
-{
-    float xDist = targetX - currentX;
-    float yDist = targetY - currentY;
-    return pow((pow(xDist, 2) + pow(yDist, 2)), 0.5);
-}
-
-float angleToPoint(float currentX, float currentY, float targetX, float targetY)
-{
-    float xDist = targetX - currentX;
-    float yDist = targetY - currentY;
-    float tempAngle = atan(xDist / yDist);
-
-    if (xDist > 0 && yDist > 0)
-    {
-        return tempAngle;
-    }
-    else if (xDist > 0 && yDist < 0)
-    {
-        return 360 - tempAngle;
-    }
-    else if (xDist < 0 && yDist > 0)
-    {
-        return 180 - tempAngle;
-    }
-    else
-        (xDist < 0 && yDist < 0);
-    {
-        return 270 - tempAngle;
-    }
-}
-
-void navigateToPoint(float targetX, float targetY, float targetAngle)
-{
-    RCSPose *pose = RCS.RequestPosition();
-
-    float dist = distToPoint(pose->x, pose->y, targetX, targetY);
-    float angle = angleToPoint(pose->x, pose->y, targetX, targetY);
-
-    if (pose->heading > angle)
-    {
-        turnRight(30, pose->heading - angle);
-    }
-    else
-    {
-        turnLeft(30, angle - pose->heading);
     }
 
-    goForward(30, dist);
+    doCompost();
+    doFruit();
+    doFertilizer();
+    doHumidifer();
+    dowWindow();
 
-    if (pose->heading > targetAngle)
-    {
-        turnRight(30, pose->heading - targetAngle);
-    }
-    else
-    {
-        turnLeft(30, targetAngle - pose->heading);
-    }
+    // PLACE TASK FUNCTION CALLS HERE
 }
