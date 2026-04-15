@@ -1,7 +1,7 @@
 #include <FEH.h>
 #include <FEHServo.h>
 #include <Arduino.h>
-#include <math.h>  
+#include <math.h>
 // githubtest
 
 // Motor and encoder declarations
@@ -22,7 +22,7 @@ AnalogInputPin cdsCell(FEHIO::Pin6);
 // Variables
 int intersectionCount = 0;    // keep track of how many intersections we've gone through
 bool humidifierIsRed = false; // keep track of whether the humidifier light is red or blue, initialized to false (blue) but will be updated when we see the light at the humidifier
-int RCSRequestCount = 0; // keep track of how many times we've requested RCS position, to avoid infinite loop if RCS is not working properly
+int RCSRequestCount = 0;      // keep track of how many times we've requested RCS position, to avoid infinite loop if RCS is not working properly
 
 // Constants
 const float WHEEL_DIAMETER = 3.0;                                                          // in inches
@@ -395,112 +395,137 @@ void getRCSLocation()
 
 void check_position(float target_x, float target_y, float target_heading)
 {
+    LCD.Clear();
+    LCD.WriteLine("Target Pos: X, Y, Head");
+    LCD.WriteLine(target_x);
+    LCD.WriteLine(target_y);
+    LCD.WriteLine(target_heading);
     RCSPose *pose;
-    int max_attempts = 3;
+    
+    int max_attempts = 15; 
 
     for (int attempt = 0; attempt < max_attempts; attempt++)
     {
         pose = RCS.RequestPosition();
+        RCSRequestCount++;
         while (pose == nullptr || pose->heading < 0)
         {
             Sleep(0.1);
             pose = RCS.RequestPosition();
+            RCSRequestCount++;
         }
+
+        float corrected_heading = pose->heading + 180.0;
+        if (corrected_heading >= 360.0) corrected_heading -= 360.0;
 
         float dx = target_x - pose->x;
         float dy = target_y - pose->y;
         float distance = sqrt(dx * dx + dy * dy);
 
-        float heading_error = target_heading - pose->heading;
+        float heading_error = target_heading - corrected_heading; 
         if (heading_error > 180.0) heading_error -= 360.0;
         else if (heading_error < -180.0) heading_error += 360.0;
 
-        if (distance <= 1.0 && abs(heading_error) <= 1.0)
+        // 容差判断
+        if (distance <= 1 && abs(heading_error) <= 2.0)
         {
+            LCD.WriteLine("Position Reached!");
             break;
         }
 
-        if (distance > 1.0)
+        if (distance > 1)
         {
             float absolute_angle_to_target = atan2(dy, dx) * 180.0 / 3.14159265;
             if (absolute_angle_to_target < 0) absolute_angle_to_target += 360.0;
 
-            float turn_to_target = absolute_angle_to_target - pose->heading;
+            float turn_to_target = absolute_angle_to_target - corrected_heading;
             if (turn_to_target > 180.0) turn_to_target -= 360.0;
             else if (turn_to_target < -180.0) turn_to_target += 360.0;
 
-            if (abs(turn_to_target) > 1.0)
+            int current_power = PULSE_POWER;
+
+            if (turn_to_target > 90.0) 
+            {
+                turn_to_target -= 180.0;  
+                current_power = -PULSE_POWER; 
+            } 
+            else if (turn_to_target < -90.0) 
+            {
+                turn_to_target += 180.0;  
+                current_power = -PULSE_POWER; 
+            }
+
+            if (abs(turn_to_target) > 2.0)
             {
                 if (turn_to_target > 0) turnLeft(PULSE_POWER, abs(turn_to_target));
                 else turnRight(PULSE_POWER, abs(turn_to_target));
                 Sleep(RCS_WAIT_TIME_IN_SEC);
             }
 
-            goForward(PULSE_POWER, distance);
+            pulseForward(current_power, PULSE_TIME); 
             Sleep(RCS_WAIT_TIME_IN_SEC);
         }
-
-        pose = RCS.RequestPosition();
-        while (pose == nullptr || pose->heading < 0)
+        else 
         {
-            Sleep(0.1);
-            pose = RCS.RequestPosition();
+            if (abs(heading_error) > 2.0)
+            {
+                if (heading_error > 0) turnLeft(PULSE_POWER, abs(heading_error));
+                else turnRight(PULSE_POWER, abs(heading_error));
+                Sleep(RCS_WAIT_TIME_IN_SEC);
+            }
         }
-
-        heading_error = target_heading - pose->heading;
-        if (heading_error > 180.0) heading_error -= 360.0;
-        else if (heading_error < -180.0) heading_error += 360.0;
-
-        if (abs(heading_error) > 1.0)
-        {
-            if (heading_error > 0) turnLeft(PULSE_POWER, abs(heading_error));
-            else turnRight(PULSE_POWER, abs(heading_error));
-            Sleep(RCS_WAIT_TIME_IN_SEC);
-        }
+        LCD.WriteLine("current position: X, Y, Head");
+        LCD.WriteLine(pose->x);
+        LCD.WriteLine(pose->y);
+        LCD.WriteLine(pose->heading);
+        Sleep(0.5);
+        LCD.Clear();
     }
+    LCD.Clear();
+    LCD.WriteLine("Current Request count:");
+    LCD.WriteLine(RCSRequestCount);
 }
 
 // 5. Task movement functions
 void openWindow()
 {
-// drive forward
-    goForward(30, 10.0); 
+    // drive forward
+    goForward(30, 10.0);
 
-// turn left degrees to face window
+    // turn left degrees to face window
     turnRight(30, 90.0);
 
-// drive forward to push window
-    goForward(30, 8.0); 
+    // drive forward to push window
+    goForward(30, 8.0);
 
-// go around the window
-    // Back up to clear the window frame 
-    goForward(-30, 4.0); 
+    // go around the window
+    // Back up to clear the window frame
+    goForward(-30, 4.0);
 
-// Turn right 45 degrees to be at an angle with window
+    // Turn right 45 degrees to be at an angle with window
     turnRight(30, 45.0);
 
-// drive forward to pass the open window
+    // drive forward to pass the open window
     goForward(30, 2.0);
 
-// turn left to be at an angle head on with the window
+    // turn left to be at an angle head on with the window
     turnLeft(30, 90.0);
 
-// drive forward to clear the back edge of the window
+    // drive forward to clear the back edge of the window
     goForward(30, 2.0);
 
-// Turn left 45 degrees to be parallel with the window
+    // Turn left 45 degrees to be parallel with the window
     turnRight(30, 45.0);
 
-// drive forward to clear the window
-    goForward(30, 2.0); 
+    // drive forward to clear the window
+    goForward(30, 2.0);
 
-// drive backward to push the window back to its closed position
-    goForward(-30, 10.0); 
-    
-// back up slightly after closing to smoothly move to next task
+    // drive backward to push the window back to its closed position
+    goForward(-30, 10.0);
+
+    // back up slightly after closing to smoothly move to next task
     goForward(-30, 3.0);
 }
-
 
 // 6. Task specific functions
 
@@ -564,22 +589,18 @@ void ERCMain()
     sideArmServo.SetMax(2120);
     RCS.InitializeTouchMenu("0800A5DYF");
     RCS.DisableRateLimit();
-    int touch_x, touch_y;
-    while(!LCD.Touch(&touch_x, &touch_y))
-    {
-        getRCSLocation();
-    }
-    Sleep(2);
+    // int touch_x, touch_y;
+    // while(!LCD.Touch(&touch_x, &touch_y))
+    // {
+    //     getRCSLocation();
+    // }
+    // Sleep(2);
     // PLACE TASK FUNCTION CALLS HERE
 
-
-
+    check_position(30, 5, 130);
 
     // TestGUI();
     // while (cdsCell.Value() > 1)
     // {
     // }
 }
-
-
-
