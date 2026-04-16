@@ -2,7 +2,7 @@
 #include <FEHServo.h>
 #include <Arduino.h>
 #include <math.h>
-#include <math.h>  
+#include <math.h>
 // githubtest
 
 // Motor and encoder declarations
@@ -35,7 +35,7 @@ const float LEFT_OPTOSENSOR_THRESHOLD = 4;                                      
 const float MIDDLE_OPTOSENSOR_THRESHOLD = 4;                                               // threshold value for middle optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float RIGHT_OPTOSENSOR_THRESHOLD = 4;                                                // threshold value for right optosensor on the line (black line will have a value above this threshold, white background will have a value below this threshold)
 const float CDS_CELL_RED_THRESHOLD = 0.48;                                                 // threshold value for cds cell to determine if the humidifier light is red or blue (red light will have a value below this threshold, blue light will have a value above this threshold)
-const float RCS_WAIT_TIME_IN_SEC = 0.1;                                                   // wait time between RCS position requests
+const float RCS_WAIT_TIME_IN_SEC = 0.1;                                                    // wait time between RCS position requests
 const float PULSE_TIME = 0.2;                                                              // duration of each pulse for RCS adjustments
 const int PULSE_POWER = 25;                                                                // power of each pulse for RCS adjustments
 const int MINUS = 0;                                                                       // constant for AruCo code orientation, means the robot needs to pulse counterclockwise to adjust
@@ -402,14 +402,8 @@ void getRCSLocation()
     LCD.WriteLine("Heading:");
     LCD.WriteLine(pose->heading);
 }
-
-void check_position(float target_x, float target_y, float target_heading)
-<<<<<<< HEAD
-void check_position(float target_coord, bool is_x_axis, float target_heading, int orientation)
 // crate position : {(x,y,heading);(26.69,87.25,87.25)}
-=======
 void check_position(float target_x, float target_y, float target_heading)
->>>>>>> f90c0ccf5feca345b69a24401d6efd36ca7c1a10
 {
     RCSPose *pose;
     int max_attempts = 3;
@@ -428,8 +422,10 @@ void check_position(float target_x, float target_y, float target_heading)
         float distance = sqrt(dx * dx + dy * dy);
 
         float heading_error = target_heading - pose->heading;
-        if (heading_error > 180.0) heading_error -= 360.0;
-        else if (heading_error < -180.0) heading_error += 360.0;
+        if (heading_error > 180.0)
+            heading_error -= 360.0;
+        else if (heading_error < -180.0)
+            heading_error += 360.0;
 
         if (distance <= 1.0 && abs(heading_error) <= 1.0)
         {
@@ -490,18 +486,18 @@ void openWindow()
 {
     // drive forward
     goForward(30, 10.0);
-// drive forward
-    goForward(30, 20.0); 
+    // drive forward
+    goForward(30, 20.0);
 
     // turn left degrees to face window
     turnRight(30, 90.0);
-// turn right degrees to face window
+    // turn right degrees to face window
     turnRight(30, 120.0);
 
     // drive forward to push window
     goForward(30, 8.0);
-// drive forward to push window
-    goForward(30, 10.0); 
+    // drive forward to push window
+    goForward(30, 10.0);
 
     // go around the window
     // Back up to clear the window frame
@@ -509,7 +505,7 @@ void openWindow()
 
     // Turn right 45 degrees to be at an angle with window
     turnRight(30, 45.0);
-// Turn right 45 degrees to be at an angle with window
+    // Turn right 45 degrees to be at an angle with window
     turnRight(30, 75.0);
 
     // drive forward to pass the open window
@@ -517,7 +513,7 @@ void openWindow()
 
     // turn left to be at an angle head on with the window
     turnLeft(30, 90.0);
-// turn left to be at an angle head on with the window
+    // turn left to be at an angle head on with the window
     turnLeft(30, 120.0);
 
     // drive forward to clear the back edge of the window
@@ -525,7 +521,7 @@ void openWindow()
 
     // Turn left 45 degrees to be parallel with the window
     turnRight(30, 45.0);
-// Turn left 45 degrees to be parallel with the window
+    // Turn left 45 degrees to be parallel with the window
     turnRight(30, 75.0);
 
     // drive forward to clear the window
@@ -538,24 +534,25 @@ void openWindow()
     goForward(-30, 3.0);
 }
 
-
 void compostSpeed(int percent)
 
 {
 
-   // int degree = 90+(percent*SERVO_BANDWIDTH/100);
+        // int degree = 90+(percent*SERVO_BANDWIDTH/100);
 
-   int degree = 90 + (percent * 90 / 100);
+  int degree = 90 + (percent * 90 / 100);
 
-   compostServo.SetDegree(degree);
-
+       compostServo.SetDegree(degree);
 }
 
-void compostTurn(int angle){
+void compostTurn(int angle)
+{
 
-   compostServo.SetMin(500); 
+       compostServo.SetMin(500);
+     
 
-   compostServo.SetMax(2500); 
+   compostServo.SetMax(2500);
+     
 
   
 
@@ -563,171 +560,120 @@ void compostTurn(int angle){
 
        return;
 
-   int operatingSpeed = 90;
+       int operatingSpeed = 90;
 
-   float timeToWait = 1.0;
+       float timeToWait = 1.0;
 
-   if (angle < 0)
-
-   {
-
-       operatingSpeed = -50;
-
-       timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
-
-   }
-
-   else
-
-   {
-
-       operatingSpeed = 50;
-
-       timeToWait = angle * SECONDS_PER_DEGREE_POS;
-
-   }
-
-   compostSpeed(operatingSpeed);
-
-   Sleep(timeToWait);
+       if (angle < 0)
 
    
+    {
+
+               operatingSpeed = -50;
+
+               timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
+
+           
+    }
+
+       else
+
+           
+    {
+
+               operatingSpeed = 50;
+
+               timeToWait = angle * SECONDS_PER_DEGREE_POS;
+
+           
+    }
+
+       compostSpeed(operatingSpeed);
+
+       Sleep(timeToWait);
+
+       
 
  
 
    compostServo.Off();
-
 }
 
- 
+void doCompost()
+{
 
-void doCompost(){
-
-   
+       
 
    LCD.WriteLine("getting off button");
 
-   turnLeft(25, 90);
+       turnLeft(25, 90);
 
-   LCD.WriteLine("turning towards compost");
+       LCD.WriteLine("turning towards compost");
 
-   goForward(50, 2);
+       goForward(50, 2);
 
-   LCD.WriteLine("drive towards the bin");
+       LCD.WriteLine("drive towards the bin");
 
-   turnRight(25, 45);
+       turnRight(25, 45);
 
-   LCD.WriteLine("turning towards compost");
+       LCD.WriteLine("turning towards compost");
 
-   goForward(50, 1);
+       goForward(50, 1);
 
-   LCD.WriteLine("get attached to bin");
+       LCD.WriteLine("get attached to bin");
 
-   turnLeft(25, 10);
+       turnLeft(25, 10);
 
-   LCD.WriteLine("turning towards compost");
+       LCD.WriteLine("turning towards compost");
 
-   goForward(50, 1);
+       goForward(50, 1);
 
-   LCD.WriteLine("get attached to bin");
+       LCD.WriteLine("get attached to bin");
 
-   turnRight(25, 5);
+       turnRight(25, 5);
 
-   LCD.WriteLine("turning towards compost");
+       LCD.WriteLine("turning towards compost");
 
-   goForward(50, 4);
+       goForward(50, 4);
 
-   LCD.WriteLine("get attached to bin");
+       LCD.WriteLine("get attached to bin");
 
-   compostTurn(-480);
+       compostTurn(-480);
 
-   LCD.WriteLine("turn compost ccw");
+       LCD.WriteLine("turn compost ccw");
 
-   Sleep(2.0);
+       Sleep(2.0);
 
-   LCD.WriteLine("return compost to intial");
+       LCD.WriteLine("return compost to intial");
 
-   compostTurn(550);
+       compostTurn(550);
 
-   LCD.WriteLine("turning towards compost");
+       LCD.WriteLine("turning towards compost");
 
-   goForward(-50, 5);
+       goForward(-50, 5);
 
-   LCD.WriteLine("reverse");
+       LCD.WriteLine("reverse");
 
-   turnLeft(25, 15);
+       turnLeft(25, 15);
 
-   LCD.WriteLine("turn towards button");
+       LCD.WriteLine("turn towards button");
 
-   goForward(-50, 1);
+       goForward(-50, 1);
 
-   LCD.WriteLine("get to button");
+       LCD.WriteLine("get to button");
 
-   turnRight(25,10);
+       turnRight(25, 10);
 
-   LCD.WriteLine("turn towards button");
+       LCD.WriteLine("turn towards button");
 
-   goForward(-60, 8);
+       goForward(-60, 8);
 
-   LCD.WriteLine("get to button");
-
+       LCD.WriteLine("get to button");
 }
 
 // 6. Task specific functions
 
 // 7. Others
-void hitButton(int percent, int angle)
-{
-    if (cdsCell.Value() < CDS_CELL_RED_THRESHOLD)
-    {
-        humidifierIsRed = true;
-        LCD.WriteLine("humidifier is red");
-        goForward(25, 3.93); // reach humidifier
-        // Calculate the number of encoder counts needed to turn the specified angle
-        int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
-
-        // Reset encoders
-        leftEncoder.ResetCounts();
-        rightEncoder.ResetCounts();
-
-        // Set motors to desired percent (left motor goes backward, right motor goes forward)
-        leftMotor.SetPercent(-percent);
-        rightMotor.SetPercent(0);
-
-        // Keeps turning until the average of the two encoders reaches the target counts
-        while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
-        {
-        }
-
-        // Stop motors
-        leftMotor.Stop();
-        rightMotor.Stop();
-    }
-    else
-    {
-        LCD.WriteLine("humidifier is blue");
-        goForward(25, 4); // reach humidifier
-        // Calculate the number of encoder counts needed to turn the specified angle
-        int targetCounts = (angle / 360.0) * (3.14159 * ROBOT_WIDTH / INCHES_PER_COUNT); // counts = fraction of a full turn * counts per full turn
-
-        // Reset encoders
-        leftEncoder.ResetCounts();
-        rightEncoder.ResetCounts();
-
-        // Set motors to desired percent (left motor goes backward, right motor goes forward)
-        leftMotor.SetPercent(-percent);
-        rightMotor.SetPercent(0);
-
-        // Keeps turning until the average of the two encoders reaches the target counts
-        while ((abs(leftEncoder.Counts()) + abs(rightEncoder.Counts())) / 2 < targetCounts)
-        {
-        }
-
-        // Stop motors
-        leftMotor.Stop();
-        rightMotor.Stop();
-    }
-}
 
 void ERCMain()
 { // initialize
@@ -741,17 +687,15 @@ void ERCMain()
         getRCSLocation();
     }
     Sleep(2);
+    while (!LCD.Touch(&touch_x, &touch_y))
+    {
+        LCD.WriteLine("Touch the screen to start!");
+    }
 
     // PLACE TASK FUNCTION CALLS HERE
-
-
-
-
+    openWindow();
     // TestGUI();
     // while (cdsCell.Value() > 1)
     // {
     // }
 }
-
-
-
