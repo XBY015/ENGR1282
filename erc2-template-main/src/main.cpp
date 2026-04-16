@@ -13,7 +13,7 @@ DigitalEncoder rightEncoder(FEHIO::Pin8);
 FEHServo humidifierServo(FEHServo::Servo0);
 FEHServo sideArmServo(FEHServo::Servo1);
 FEHServo compostServo(FEHServo::Servo3);
-FEHServo bigArmServo(FEHMotor::Servo);
+// FEHServo bigArmServo(FEHMotor::Servo);
 
 // Sensor declarations
 AnalogInputPin optosensorLeft(FEHIO::Pin4);
@@ -45,11 +45,6 @@ float distToPoint(float currentX, float currentY, float targetX, float targetY);
 float angleToPoint(float currentX, float currentY, float targetX, float targetY);
 
 // servo methods
-
-void turnServoByAngle(float angle, FEHServo servo)
-{
-    servo.SetMax
-}
 
 // Left motor percentage is set to be negative since the motors are mounted in opposite directions
 void goForward(int percent, float distance)
@@ -532,143 +527,6 @@ void openWindow()
 
     // back up slightly after closing to smoothly move to next task
     goForward(-30, 3.0);
-}
-
-void compostSpeed(int percent)
-
-{
-
-        // int degree = 90+(percent*SERVO_BANDWIDTH/100);
-
-  int degree = 90 + (percent * 90 / 100);
-
-       compostServo.SetDegree(degree);
-}
-
-void compostTurn(int angle)
-{
-
-       compostServo.SetMin(500);
-     
-
-   compostServo.SetMax(2500);
-     
-
-  
-
-   if (angle == 0)
-
-       return;
-
-       int operatingSpeed = 90;
-
-       float timeToWait = 1.0;
-
-       if (angle < 0)
-
-   
-    {
-
-               operatingSpeed = -50;
-
-               timeToWait = -angle * SECONDS_PER_DEGREE_NEG;
-
-           
-    }
-
-       else
-
-           
-    {
-
-               operatingSpeed = 50;
-
-               timeToWait = angle * SECONDS_PER_DEGREE_POS;
-
-           
-    }
-
-       compostSpeed(operatingSpeed);
-
-       Sleep(timeToWait);
-
-       
-
- 
-
-   compostServo.Off();
-}
-
-void doCompost()
-{
-
-       
-
-   LCD.WriteLine("getting off button");
-
-       turnLeft(25, 90);
-
-       LCD.WriteLine("turning towards compost");
-
-       goForward(50, 2);
-
-       LCD.WriteLine("drive towards the bin");
-
-       turnRight(25, 45);
-
-       LCD.WriteLine("turning towards compost");
-
-       goForward(50, 1);
-
-       LCD.WriteLine("get attached to bin");
-
-       turnLeft(25, 10);
-
-       LCD.WriteLine("turning towards compost");
-
-       goForward(50, 1);
-
-       LCD.WriteLine("get attached to bin");
-
-       turnRight(25, 5);
-
-       LCD.WriteLine("turning towards compost");
-
-       goForward(50, 4);
-
-       LCD.WriteLine("get attached to bin");
-
-       compostTurn(-480);
-
-       LCD.WriteLine("turn compost ccw");
-
-       Sleep(2.0);
-
-       LCD.WriteLine("return compost to intial");
-
-       compostTurn(550);
-
-       LCD.WriteLine("turning towards compost");
-
-       goForward(-50, 5);
-
-       LCD.WriteLine("reverse");
-
-       turnLeft(25, 15);
-
-       LCD.WriteLine("turn towards button");
-
-       goForward(-50, 1);
-
-       LCD.WriteLine("get to button");
-
-       turnRight(25, 10);
-
-       LCD.WriteLine("turn towards button");
-
-       goForward(-60, 8);
-
-       LCD.WriteLine("get to button");
 }
 
 // 6. Task specific functions
